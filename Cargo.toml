@@ -1,0 +1,11 @@
+[package]
+name = "release-note"
+description = "Generate a release note for your project"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.49", features = ["derive"] }
+git2 = "0.20.2"

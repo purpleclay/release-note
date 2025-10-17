@@ -20,7 +20,7 @@ impl GitRepo {
         Ok(GitRepo { repo })
     }
 
-    pub fn history(&self, from: Option<String>) -> Result<Vec<Commit>> {
+    pub fn history(&self, from: Option<String>, to: Option<String>) -> Result<Vec<Commit>> {
         let mut commits = Vec::new();
         let mut revwalk = self
             .repo
@@ -36,13 +36,24 @@ impl GitRepo {
             revwalk.push_head()?;
         }
 
+        if let Some(to) = to {
+            let object = self.repo.revparse_single(&to)?;
+            revwalk.hide(object.id())?;
+        }
+
         for oid in revwalk {
             let commit = self
                 .repo
                 .find_commit(oid?)
                 .context("failed to find commit")?;
             let hash = commit.id().to_string();
-            let message = commit.message().unwrap_or_default().to_string();
+            let message = commit
+                .message()
+                .unwrap_or_default()
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .to_string();
             commits.push(Commit { hash, message });
         }
         Ok(commits)

@@ -2,12 +2,13 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use git2::{Repository, Sort};
+use serde::Serialize;
 
 pub struct GitRepo {
     repo: Repository,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Commit {
     pub hash: String,
     pub message: String,

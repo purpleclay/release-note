@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::git::GitRepo;
 
 mod git;
+mod markdown;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -34,8 +35,6 @@ fn main() -> Result<()> {
     let repo = GitRepo::open(args.path)?;
 
     let history = repo.history(args.from, args.to)?;
-    for commit in history {
-        println!("- {} {}", commit.hash, commit.message);
-    }
+    println!("{}", markdown::render_history(&history)?);
     Ok(())
 }

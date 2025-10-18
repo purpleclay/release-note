@@ -29,6 +29,11 @@
           extensions = ["rust-src" "cargo" "rustc" "clippy" "rustfmt"];
         };
 
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
+
         buildInputs = with pkgs; [
           alejandra
           nil
@@ -47,6 +52,10 @@
         with pkgs; {
           devShells.default = mkShell {
             inherit buildInputs nativeBuildInputs;
+          };
+
+          packages.default = pkgs.callPackage ./default.nix {
+            inherit rustPlatform;
           };
         }
     );

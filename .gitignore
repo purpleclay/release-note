@@ -11,6 +11,7 @@
 !.envrc
 !flake.nix
 !flake.lock
+!default.nix
 
 !Cargo.toml
 !Cargo.lock

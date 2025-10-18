@@ -36,6 +36,7 @@
           shellcheck
           shfmt
           typos
+          zlib
         ];
 
         nativeBuildInputs = with pkgs; [

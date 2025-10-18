@@ -1,0 +1,127 @@
+name: release
+on:
+  push:
+    tags:
+      - "*.*.*"
+jobs:
+  build:
+    runs-on: ${{ matrix.platform.runs-on }}
+    name: build / ${{ matrix.platform.name }}
+    env:
+      APP_NAME: yam
+    strategy:
+      matrix:
+        platform:
+          - name: linux_x86_64_musl
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            use-zigbuild: true
+          - name: linux_aarch64_musl
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+            use-zigbuild: true
+          - name: darwin_x86_64
+            runs-on: macos-15
+            target: x86_64-apple-darwin
+            use-zigbuild: false
+          - name: darwin_aarch64
+            runs-on: macos-15
+            target: aarch64-apple-darwin
+            use-zigbuild: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Setup Zig
+        if: ${{ matrix.platform.use-zigbuild }}
+        uses: goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406 # v2.2.1
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        if: ${{ matrix.platform.use-zigbuild }}
+        run: cargo install cargo-zigbuild
+
+      - name: Cache
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+
+      - name: Build with zigbuild
+        if: ${{ matrix.platform.use-zigbuild }}
+        run: cargo zigbuild --locked --release --target ${{ matrix.platform.target }}
+
+      - name: Build with cargo
+        if: ${{ !matrix.platform.use-zigbuild }}
+        run: cargo build --locked --release --target ${{ matrix.platform.target }}
+
+      - name: Archive
+        id: archive
+        shell: bash
+        run: |
+          EXE_SUFFIX=""
+          case ${{ matrix.platform.target }} in
+            *-pc-windows-*)
+              EXE_SUFFIX=".exe"
+              ;;
+          esac;
+          PKG_SUFFIX=".tar.gz";
+          case ${{ matrix.platform.target }} in
+            *-pc-windows-*)
+              PKG_SUFFIX=".zip"
+              ;;
+          esac;
+          PKG_NAME=$APP_NAME-${{ github.ref_name }}-${{ matrix.platform.target }}$PKG_SUFFIX
+          PKG_DIR=archive/$APP_NAME
+          mkdir -p $PKG_DIR
+          cp target/${{ matrix.platform.target }}/release/$APP_NAME$EXE_SUFFIX $PKG_DIR/
+          cp README.md LICENSE $PKG_DIR/
+
+          pushd $PKG_DIR >/dev/null
+          case ${{ matrix.platform.target }} in
+            *-pc-windows-*)
+              7z -y a "${PKG_NAME}" * | tail -2
+              ;;
+            *)
+              tar czf "${PKG_NAME}" *
+              ;;
+          esac;
+          popd >/dev/null
+
+          # Output path to archive for future upload
+          echo "archive-name=${PKG_NAME}" >> $GITHUB_OUTPUT
+          echo "archive-path=${PKG_DIR}/${PKG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Upload Archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.archive.outputs.archive-name }}
+          path: ${{ steps.archive.outputs.archive-path }}
+          retention-days: 1
+
+  release:
+    runs-on: ubuntu-24.04
+    name: release
+    permissions:
+      contents: write
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Download Archives
+        id: download
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          path: archives
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
+        with:
+          files: ${{ steps.download.outputs.download-path }}/*
+          generate_release_notes: true
+          make_latest: true

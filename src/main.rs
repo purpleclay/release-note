@@ -7,8 +7,12 @@ use crate::git::GitRepo;
 mod git;
 mod markdown;
 
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, disable_version_flag = true, disable_help_subcommand = true)]
 struct Args {
     /// A starting reference within the git history (inclusive). Defaults to HEAD.
     ///
@@ -28,13 +32,41 @@ struct Args {
     /// Path to the root working directory of a repository
     #[arg(value_name = "DIR", long, default_value = ".")]
     path: PathBuf,
+
+    /// Print build time version information
+    #[arg(short = 'V', long)]
+    version: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    if args.version {
+        print_version_info();
+        return Ok(());
+    }
+
     let repo = GitRepo::open(args.path)?;
 
     let history = repo.history(args.from, args.to)?;
     println!("{}", markdown::render_history(&history)?);
     Ok(())
+}
+
+fn print_version_info() {
+    println!("version:    {}", built_info::PKG_VERSION);
+    println!("rustc:      {}", built_info::RUSTC_VERSION);
+    println!("target:     {}", built_info::TARGET);
+
+    if let Some(git_ref) = built_info::GIT_HEAD_REF {
+        println!(
+            "git_branch: {}",
+            git_ref.strip_prefix("refs/heads/").unwrap_or(git_ref)
+        );
+    }
+
+    if let Some(commit_hash) = built_info::GIT_COMMIT_HASH {
+        println!("git_commit: {commit_hash}");
+    }
+    println!("build_date: {}", built_info::BUILT_TIME_UTC);
 }

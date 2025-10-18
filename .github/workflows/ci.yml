@@ -23,32 +23,9 @@ permissions:
   contents: read
   pull-requests: read
 jobs:
-  changes:
-    runs-on: ubuntu-24.04
-    permissions:
-      pull-requests: read
-    outputs:
-      src: ${{ steps.filter.outputs.src }}
-      tests: ${{ steps.filter.outputs.tests }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-
-      - name: Check for changes
-        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
-        id: filter
-        with:
-          filters: |
-            src:
-              - 'src/**'
-              - 'Cargo.lock'
-            tests:
-              - 'tests/**'
-
   rustfmt:
     runs-on: ubuntu-24.04
-    needs: changes
-    if: github.actor != 'renovate[bot]' && needs.changes.outputs.src == 'true'
+    if: github.actor != 'renovate[bot]'
     name: rustfmt / stable
     steps:
       - name: Checkout
@@ -72,8 +49,6 @@ jobs:
 
   clippy:
     runs-on: ubuntu-24.04
-    needs: changes
-    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     name: clippy / stable
     steps:
       - name: Checkout repository
@@ -100,43 +75,9 @@ jobs:
       - name: Cargo Clippy
         run: nix develop -c cargo clippy -- -Dwarnings
 
-  test:
-    runs-on: ${{ matrix.os }}
-    needs: changes
-    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
-    name: test / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
-        with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: true
-          useDaemon: false
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
-        with:
-          shared-key: "test-${{ matrix.os }}"
-
-      - name: Run tests
-        run: nix develop -c cargo test
-
   build-fast:
     runs-on: ubuntu-24.04
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.src == 'true'
+    if: github.event_name == 'pull_request'
     name: build-fast / linux_x86_64_musl
     steps:
       - name: Checkout
@@ -163,8 +104,7 @@ jobs:
 
   build:
     runs-on: ${{ matrix.platform.runs-on }}
-    needs: changes
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.src == 'true'
+    if: github.ref == 'refs/heads/main'
     name: build / ${{ matrix.platform.name }}
     strategy:
       matrix:

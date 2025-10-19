@@ -6,6 +6,8 @@ pub const TEMPLATE: &str = r#"
 {%- for commit in commits %}
 - {{ commit.hash }} {{ commit.message }}
 {%- endfor %}
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*
 "#;
 
 pub fn render_history(commits: &[Commit]) -> Result<String> {

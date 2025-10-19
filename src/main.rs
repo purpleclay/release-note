@@ -47,7 +47,6 @@ fn main() -> Result<()> {
     }
 
     let repo = GitRepo::open(args.path)?;
-
     let history = repo.history(args.from, args.to)?;
     println!("{}", markdown::render_history(&history)?);
     Ok(())

@@ -111,6 +111,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Release Note
+        id: release_notes
+        run: |
+          echo "note<<EOF" >> $GITHUB_OUTPUT
+          nix run . -- . >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Download Archives
         id: download
@@ -123,5 +137,5 @@ jobs:
         uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
         with:
           files: ${{ steps.download.outputs.download-path }}/*
-          generate_release_notes: true
+          body: ${{ steps.release_notes.outputs.note }}
           make_latest: true

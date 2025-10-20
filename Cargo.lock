@@ -869,6 +869,7 @@ dependencies = [
  "built",
  "clap",
  "git2",
+ "regex",
  "serde",
  "tera",
 ]

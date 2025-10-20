@@ -2,8 +2,10 @@ use anyhow::Result;
 use clap::{Parser, arg};
 use std::path::PathBuf;
 
+use crate::analyzer::CommitAnalyzer;
 use crate::git::GitRepo;
 
+mod analyzer;
 mod git;
 mod markdown;
 
@@ -48,7 +50,8 @@ fn main() -> Result<()> {
 
     let repo = GitRepo::open(args.path)?;
     let history = repo.history(args.from, args.to)?;
-    println!("{}", markdown::render_history(&history)?);
+    let categorized = CommitAnalyzer::analyze(&history);
+    println!("{}", markdown::render_history(&categorized)?);
     Ok(())
 }
 

@@ -14,7 +14,66 @@ pub struct GitRepo {
 #[derive(Debug, Clone, Serialize)]
 pub struct Commit {
     pub hash: String,
-    pub message: String,
+    pub first_line: String,
+    pub body: Option<String>,
+    pub footer: Option<String>,
+    pub author: String,
+}
+
+impl Commit {
+    fn from_git2_commit(commit: &git2::Commit) -> Self {
+        let hash = commit.id().to_string();
+        let author = commit.author().name().unwrap_or_default().to_string();
+
+        let message = commit.message().unwrap_or_default();
+        let lines: Vec<&str> = message.lines().collect();
+        let first_line = lines.first().unwrap_or(&"").to_string();
+
+        let (body, footer) = if lines.len() > 1 {
+            let remaining = &lines[1..];
+            if let Some(last_blank_idx) = remaining.iter().rposition(|line| line.trim().is_empty())
+            {
+                let body_lines = &remaining[..last_blank_idx];
+                let footer_lines = &remaining[last_blank_idx + 1..];
+
+                let body_text = body_lines.join("\n").trim().to_string();
+                let footer_text = footer_lines.join("\n").trim().to_string();
+
+                (
+                    if body_text.is_empty() {
+                        None
+                    } else {
+                        Some(body_text)
+                    },
+                    if footer_text.is_empty() {
+                        None
+                    } else {
+                        Some(footer_text)
+                    },
+                )
+            } else {
+                let body_text = remaining.join("\n").trim().to_string();
+                (
+                    if body_text.is_empty() {
+                        None
+                    } else {
+                        Some(body_text)
+                    },
+                    None,
+                )
+            }
+        } else {
+            (None, None)
+        };
+
+        Commit {
+            hash,
+            first_line,
+            body,
+            footer,
+            author,
+        }
+    }
 }
 
 impl GitRepo {
@@ -98,19 +157,11 @@ impl GitRepo {
         }
 
         for oid in revwalk {
-            let commit = self
+            let git_commit = self
                 .repo
                 .find_commit(oid?)
                 .context("failed to find commit")?;
-            let hash = commit.id().to_string();
-            let message = commit
-                .message()
-                .unwrap_or_default()
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .to_string();
-            commits.push(Commit { hash, message });
+            commits.push(Commit::from_git2_commit(&git_commit));
         }
         Ok(commits)
     }

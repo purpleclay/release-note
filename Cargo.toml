@@ -12,6 +12,7 @@ strip = "debuginfo"
 anyhow = "1.0.100"
 clap = { version = "4.5.49", features = ["derive"] }
 git2 = { version = "0.20.2", default-features = false }
+regex = "1.11.1"
 serde = { version = "1.0.228", features = ["derive"] }
 tera = "1.20.0"
 

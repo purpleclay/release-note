@@ -11,7 +11,9 @@ strip = "debuginfo"
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.49", features = ["derive"] }
+env_logger = "0.11"
 git2 = { version = "0.20.2", default-features = false }
+log = "0.4"
 regex = "1.11.1"
 serde = { version = "1.0.228", features = ["derive"] }
 tera = "1.20.0"

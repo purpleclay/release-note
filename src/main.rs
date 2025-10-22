@@ -35,6 +35,10 @@ struct Args {
     #[arg(value_name = "DIR", long, default_value = ".")]
     path: PathBuf,
 
+    /// Enable verbose logging
+    #[arg(short, long)]
+    verbose: bool,
+
     /// Print build time version information
     #[arg(short = 'V', long)]
     version: bool,
@@ -48,9 +52,21 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    if args.verbose {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                use std::io::Write;
+                writeln!(buf, "{}", record.args())
+            })
+            .filter_level(log::LevelFilter::Info)
+            .init();
+    }
+
     let repo = GitRepo::open(args.path)?;
     let history = repo.history(args.from, args.to)?;
     let categorized = CommitAnalyzer::analyze(&history);
+    log::info!("");
+
     println!("{}", markdown::render_history(&categorized)?);
     Ok(())
 }

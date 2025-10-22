@@ -37,6 +37,15 @@ impl CommitAnalyzer {
                 .push(commit.clone());
         }
 
+        for (category, commits) in &by_category {
+            log::info!(
+                "  * {}: {} commit{}",
+                format!("{:?}", category).to_lowercase(),
+                commits.len(),
+                if commits.len() == 1 { "" } else { "s" }
+            );
+        }
+
         CategorizedCommits { by_category }
     }
 

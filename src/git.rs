@@ -5,9 +5,14 @@ use anyhow::{Context, Result};
 use git2::{Oid, Repository, Sort};
 use serde::Serialize;
 
+struct Tag {
+    name: String,
+    oid: Oid,
+}
+
 pub struct GitRepo {
     repo: Repository,
-    tag_oids: Vec<Oid>,
+    tags: Vec<Tag>,
     tag_index: HashMap<Oid, usize>,
 }
 
@@ -81,22 +86,22 @@ impl GitRepo {
         let repo = Repository::open(path)
             .context("failed to open git repository at the specified location")?;
 
-        let tag_oids = Self::load_tags_sorted(&repo)?;
+        let tags = Self::load_tags_sorted(&repo)?;
 
-        let tag_index: HashMap<Oid, usize> = tag_oids
+        let tag_index: HashMap<Oid, usize> = tags
             .iter()
             .enumerate()
-            .map(|(idx, &oid)| (oid, idx))
+            .map(|(idx, tag)| (tag.oid, idx))
             .collect();
 
         Ok(GitRepo {
             repo,
-            tag_oids,
+            tags,
             tag_index,
         })
     }
 
-    fn load_tags_sorted(repo: &Repository) -> Result<Vec<Oid>> {
+    fn load_tags_sorted(repo: &Repository) -> Result<Vec<Tag>> {
         let mut tags = Vec::new();
         let tag_names = repo.tag_names(None)?;
 
@@ -105,51 +110,94 @@ impl GitRepo {
             if let Ok(reference) = repo.find_reference(&tag_ref)
                 && let Ok(commit) = reference.peel_to_commit()
             {
-                tags.push((commit.id(), commit.time().seconds()));
+                tags.push((tag_name.to_string(), commit.id(), commit.time().seconds()));
             }
         }
 
-        tags.sort_by(|a, b| b.1.cmp(&a.1));
-        Ok(tags.into_iter().map(|(oid, _)| oid).collect())
+        tags.sort_by(|a, b| b.2.cmp(&a.2));
+        Ok(tags
+            .into_iter()
+            .map(|(name, oid, _)| Tag { name, oid })
+            .collect())
     }
 
     pub fn history(&self, from: Option<String>, to: Option<String>) -> Result<Vec<Commit>> {
-        let from_ref = match from {
-            Some(from) => {
-                let object = self.repo.revparse_single(&from)?;
-                object.peel_to_commit()?.id()
+        let (from_oid, from_ref) = match from {
+            Some(ref from) => {
+                let object = self.repo.revparse_single(from)?;
+                let id = object.peel_to_commit()?.id();
+
+                if let Some(tag) = self.tags.iter().find(|t| t.oid == id) {
+                    (id, format!("{} ({})", tag.name, &id.to_string()[..7]))
+                } else {
+                    (id, id.to_string()[..7].to_string())
+                }
             }
             None => {
                 let head = self.repo.head()?;
-                head.peel_to_commit()?.id()
+                let id = head.peel_to_commit()?.id();
+                (id, format!("HEAD ({})", &id.to_string()[..7]))
             }
         };
 
-        let to_ref = match to {
-            Some(to) => {
-                let object = self.repo.revparse_single(&to)?;
-                Some(object.peel_to_commit()?.id())
+        let (to_oid, to_ref) = match to {
+            Some(ref to) => {
+                let object = self.repo.revparse_single(to)?;
+                let id = object.peel_to_commit()?.id();
+                (Some(id), Some(id.to_string()[..7].to_string()))
             }
             None => {
-                if let Some(&index) = self.tag_index.get(&from_ref) {
-                    if index + 1 < self.tag_oids.len() {
-                        Some(self.tag_oids[index + 1])
+                if let Some(&index) = self.tag_index.get(&from_oid) {
+                    if index + 1 < self.tags.len() {
+                        let prev_tag = &self.tags[index + 1];
+                        (
+                            Some(prev_tag.oid),
+                            Some(format!(
+                                "{} ({})",
+                                prev_tag.name.clone(),
+                                &prev_tag.oid.to_string()[..7],
+                            )),
+                        )
                     } else {
-                        None
+                        (None, None)
                     }
-                } else if !self.tag_oids.is_empty() {
+                } else if !self.tags.is_empty() {
                     let head_oid = self.repo.head()?.peel_to_commit()?.id();
 
-                    if from_ref == head_oid {
-                        Some(self.tag_oids[0])
+                    if from_oid == head_oid {
+                        let tag = &self.tags[0];
+                        (
+                            Some(tag.oid),
+                            Some(format!(
+                                "{} ({})",
+                                tag.name.clone(),
+                                &tag.oid.to_string()[..7],
+                            )),
+                        )
+                    } else if let Some(tag_oid) = self.find_closest_tag(from_oid)? {
+                        let tag = self.tags.iter().find(|t| t.oid == tag_oid).unwrap();
+                        (
+                            Some(tag.oid),
+                            Some(format!(
+                                "{} ({})",
+                                tag.name.clone(),
+                                &tag.oid.to_string()[..7],
+                            )),
+                        )
                     } else {
-                        self.find_closest_tag(from_ref)?
+                        (None, None)
                     }
                 } else {
-                    None
+                    (None, None)
                 }
             }
         };
+
+        log::info!(
+            "scanning from {}{}",
+            from_ref,
+            to_ref.map_or_else(|| "".to_string(), |v| format!(" to {}", v)),
+        );
 
         let mut commits = Vec::new();
         let mut revwalk = self
@@ -158,10 +206,10 @@ impl GitRepo {
             .context("failed to create revision walker")?;
 
         revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME)?;
-        revwalk.push(from_ref)?;
+        revwalk.push(from_oid)?;
 
-        if let Some(to_ref) = to_ref {
-            revwalk.hide(to_ref)?;
+        if let Some(to_oid) = to_oid {
+            revwalk.hide(to_oid)?;
         }
 
         for oid in revwalk {
@@ -306,9 +354,9 @@ mod tests {
     fn test_from_ref_is_tag() -> Result<()> {
         let test_repo = TestRepo::from_log(
             "
-            (tag: v3.0.0) Third commit
-            (tag: v2.0.0) Second commit
-            (tag: v1.0.0) First commit
+            (tag: v3.0.0) To be, or not to be, that is the question
+            (tag: v2.0.0) All the world's a stage
+            (tag: v1.0.0) What's in a name? That which we call a rose
         ",
         )?;
 
@@ -316,7 +364,10 @@ mod tests {
         let commits = git_repo.history(Some("v3.0.0".to_string()), None)?;
 
         assert_eq!(commits.len(), 1);
-        assert_eq!(commits[0].first_line, "Third commit");
+        assert_eq!(
+            commits[0].first_line,
+            "To be, or not to be, that is the question"
+        );
         Ok(())
     }
 
@@ -324,9 +375,9 @@ mod tests {
     fn test_from_ref_is_head_with_tags() -> Result<()> {
         let test_repo = TestRepo::from_log(
             "
-            Third commit
-            Second commit
-            (tag: v1.0.0) First commit
+            The course of true love never did run smooth
+            Brevity is the soul of wit
+            (tag: v1.0.0) Cowards die many times before their deaths
         ",
         )?;
 
@@ -334,8 +385,11 @@ mod tests {
         let commits = git_repo.history(None, None)?;
 
         assert_eq!(commits.len(), 2);
-        assert_eq!(commits[0].first_line, "Third commit");
-        assert_eq!(commits[1].first_line, "Second commit");
+        assert_eq!(
+            commits[0].first_line,
+            "The course of true love never did run smooth"
+        );
+        assert_eq!(commits[1].first_line, "Brevity is the soul of wit");
         Ok(())
     }
 
@@ -343,11 +397,11 @@ mod tests {
     fn test_from_ref_is_non_head_commit_with_tags() -> Result<()> {
         let test_repo = TestRepo::from_log(
             "
-            Fifth commit
-            Fourth commit
-            (tag: v2.0.0) Third commit
-            Second commit
-            (tag: v1.0.0) First commit
+            Some are born great, some achieve greatness
+            And some have greatness thrust upon them
+            (tag: v2.0.0) The lady doth protest too much, methinks
+            Though this be madness, yet there is method in't
+            (tag: v1.0.0) A horse! A horse! My kingdom for a horse!
         ",
         )?;
 
@@ -356,7 +410,10 @@ mod tests {
         let commits = git_repo.history(Some(c2_hash), None)?;
 
         assert_eq!(commits.len(), 1);
-        assert_eq!(commits[0].first_line, "Second commit");
+        assert_eq!(
+            commits[0].first_line,
+            "Though this be madness, yet there is method in't"
+        );
         Ok(())
     }
 
@@ -364,9 +421,9 @@ mod tests {
     fn test_from_ref_with_no_tags() -> Result<()> {
         let test_repo = TestRepo::from_log(
             "
-            Third commit
-            Second commit
-            First commit
+            The better part of valor is discretion
+            Lord, what fools these mortals be!
+            If music be the food of love, play on
         ",
         )?;
 
@@ -374,9 +431,15 @@ mod tests {
         let commits = git_repo.history(None, None)?;
 
         assert_eq!(commits.len(), 3);
-        assert_eq!(commits[0].first_line, "Third commit");
-        assert_eq!(commits[1].first_line, "Second commit");
-        assert_eq!(commits[2].first_line, "First commit");
+        assert_eq!(
+            commits[0].first_line,
+            "The better part of valor is discretion"
+        );
+        assert_eq!(commits[1].first_line, "Lord, what fools these mortals be!");
+        assert_eq!(
+            commits[2].first_line,
+            "If music be the food of love, play on"
+        );
 
         Ok(())
     }

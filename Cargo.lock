@@ -956,6 +956,7 @@ dependencies = [
  "git2",
  "log",
  "regex",
+ "semver",
  "serde",
  "tempfile",
  "tera",

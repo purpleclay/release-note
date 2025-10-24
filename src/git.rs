@@ -3,6 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use git2::{Oid, Repository, Sort};
+use semver::Version;
 use serde::Serialize;
 
 struct Tag {
@@ -101,11 +102,20 @@ impl GitRepo {
         })
     }
 
+    fn is_semver_tag(tag_name: &str) -> bool {
+        let to_parse = tag_name.strip_prefix('v').unwrap_or(tag_name);
+        Version::parse(to_parse).is_ok()
+    }
+
     fn load_tags_sorted(repo: &Repository) -> Result<Vec<Tag>> {
         let mut tags = Vec::new();
         let tag_names = repo.tag_names(None)?;
 
         for tag_name in tag_names.iter().flatten() {
+            if !Self::is_semver_tag(tag_name) {
+                continue;
+            }
+
             let tag_ref = format!("refs/tags/{}", tag_name);
             if let Ok(reference) = repo.find_reference(&tag_ref)
                 && let Ok(commit) = reference.peel_to_commit()
@@ -377,7 +387,7 @@ mod tests {
             "
             The course of true love never did run smooth
             Brevity is the soul of wit
-            (tag: v1.0.0) Cowards die many times before their deaths
+            (tag: 1.0.0) Cowards die many times before their deaths
         ",
         )?;
 
@@ -440,6 +450,37 @@ mod tests {
             commits[2].first_line,
             "If music be the food of love, play on"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_detection_with_non_semver_tags() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            The quality of mercy is not strained
+            It droppeth as the gentle rain from heaven
+            (tag: random-tag) It is twice blessed
+            (tag: v1.0.0) Upon the place beneath
+            Shall I compare thee to a summer's day?
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+
+        // Auto-detection from HEAD should find v1.0.0 and ignore random-tag
+        let commits = git_repo.history(None, None)?;
+
+        assert_eq!(commits.len(), 3);
+        assert_eq!(
+            commits[0].first_line,
+            "The quality of mercy is not strained"
+        );
+        assert_eq!(
+            commits[1].first_line,
+            "It droppeth as the gentle rain from heaven"
+        );
+        assert_eq!(commits[2].first_line, "It is twice blessed");
 
         Ok(())
     }

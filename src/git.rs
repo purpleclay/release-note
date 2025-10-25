@@ -13,8 +13,6 @@ struct Tag {
 
 pub struct GitRepo {
     repo: Repository,
-    tags: Vec<Tag>,
-    tag_index: HashMap<Oid, usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,31 +85,52 @@ impl GitRepo {
         let repo = Repository::open(path)
             .context("failed to open git repository at the specified location")?;
 
-        let tags = Self::load_tags_sorted(&repo)?;
+        Ok(GitRepo { repo })
+    }
 
-        let tag_index: HashMap<Oid, usize> = tags
-            .iter()
-            .enumerate()
-            .map(|(idx, tag)| (tag.oid, idx))
-            .collect();
+    fn detect_prefix_from_from_ref(&self, from_ref: &Option<String>) -> Result<Option<String>> {
+        let Some(ref_str) = from_ref else {
+            return Ok(None);
+        };
 
-        Ok(GitRepo {
-            repo,
-            tags,
-            tag_index,
-        })
+        if !ref_str.contains('/') {
+            return Ok(None);
+        }
+
+        let slash_pos = ref_str.rfind('/').unwrap();
+        let potential_prefix = &ref_str[..slash_pos];
+        let version_part = &ref_str[slash_pos + 1..];
+
+        let to_parse = version_part.strip_prefix('v').unwrap_or(version_part);
+        if Version::parse(to_parse).is_ok() {
+            Ok(Some(potential_prefix.to_string()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn tag_matches_prefix(tag_name: &str, prefix_filter: Option<&str>) -> bool {
+        match prefix_filter {
+            None => !tag_name.contains('/'),
+            Some(prefix) => tag_name.starts_with(&format!("{}/", prefix)),
+        }
     }
 
     fn is_semver_tag(tag_name: &str) -> bool {
-        let to_parse = tag_name.strip_prefix('v').unwrap_or(tag_name);
+        let version_part = tag_name.rsplit('/').next().unwrap_or(tag_name);
+        let to_parse = version_part.strip_prefix('v').unwrap_or(version_part);
         Version::parse(to_parse).is_ok()
     }
 
-    fn load_tags_sorted(repo: &Repository) -> Result<Vec<Tag>> {
+    fn load_tags_sorted(repo: &Repository, prefix_filter: Option<&str>) -> Result<Vec<Tag>> {
         let mut tags = Vec::new();
         let tag_names = repo.tag_names(None)?;
 
         for tag_name in tag_names.iter().flatten() {
+            if !Self::tag_matches_prefix(tag_name, prefix_filter) {
+                continue;
+            }
+
             if !Self::is_semver_tag(tag_name) {
                 continue;
             }
@@ -132,12 +151,21 @@ impl GitRepo {
     }
 
     pub fn history(&self, from: Option<String>, to: Option<String>) -> Result<Vec<Commit>> {
+        let prefix_filter = self.detect_prefix_from_from_ref(&from)?;
+        let tags = Self::load_tags_sorted(&self.repo, prefix_filter.as_deref())?;
+
+        let tag_index: HashMap<Oid, usize> = tags
+            .iter()
+            .enumerate()
+            .map(|(idx, tag)| (tag.oid, idx))
+            .collect();
+
         let (from_oid, from_ref) = match from {
             Some(ref from) => {
                 let object = self.repo.revparse_single(from)?;
                 let id = object.peel_to_commit()?.id();
 
-                if let Some(tag) = self.tags.iter().find(|t| t.oid == id) {
+                if let Some(tag) = tags.iter().find(|t| t.oid == id) {
                     (id, format!("{} ({})", tag.name, &id.to_string()[..7]))
                 } else {
                     (id, id.to_string()[..7].to_string())
@@ -157,9 +185,9 @@ impl GitRepo {
                 (Some(id), Some(id.to_string()[..7].to_string()))
             }
             None => {
-                if let Some(&index) = self.tag_index.get(&from_oid) {
-                    if index + 1 < self.tags.len() {
-                        let prev_tag = &self.tags[index + 1];
+                if let Some(&index) = tag_index.get(&from_oid) {
+                    if index + 1 < tags.len() {
+                        let prev_tag = &tags[index + 1];
                         (
                             Some(prev_tag.oid),
                             Some(format!(
@@ -171,11 +199,11 @@ impl GitRepo {
                     } else {
                         (None, None)
                     }
-                } else if !self.tags.is_empty() {
+                } else if !tags.is_empty() {
                     let head_oid = self.repo.head()?.peel_to_commit()?.id();
 
                     if from_oid == head_oid {
-                        let tag = &self.tags[0];
+                        let tag = &tags[0];
                         (
                             Some(tag.oid),
                             Some(format!(
@@ -184,8 +212,8 @@ impl GitRepo {
                                 &tag.oid.to_string()[..7],
                             )),
                         )
-                    } else if let Some(tag_oid) = self.find_closest_tag(from_oid)? {
-                        let tag = self.tags.iter().find(|t| t.oid == tag_oid).unwrap();
+                    } else if let Some(tag_oid) = self.find_closest_tag(from_oid, &tag_index)? {
+                        let tag = tags.iter().find(|t| t.oid == tag_oid).unwrap();
                         (
                             Some(tag.oid),
                             Some(format!(
@@ -232,14 +260,18 @@ impl GitRepo {
         Ok(commits)
     }
 
-    fn find_closest_tag(&self, from_oid: Oid) -> Result<Option<Oid>> {
+    fn find_closest_tag(
+        &self,
+        from_oid: Oid,
+        tag_index: &HashMap<Oid, usize>,
+    ) -> Result<Option<Oid>> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME)?;
         revwalk.push(from_oid)?;
 
         for oid in revwalk {
             let oid = oid?;
-            if self.tag_index.contains_key(&oid) {
+            if tag_index.contains_key(&oid) {
                 return Ok(Some(oid));
             }
         }
@@ -467,8 +499,6 @@ mod tests {
         )?;
 
         let git_repo = GitRepo::open(test_repo.path())?;
-
-        // Auto-detection from HEAD should find v1.0.0 and ignore random-tag
         let commits = git_repo.history(None, None)?;
 
         assert_eq!(commits.len(), 3);
@@ -481,6 +511,173 @@ mod tests {
             "It droppeth as the gentle rain from heaven"
         );
         assert_eq!(commits[2].first_line, "It is twice blessed");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_monorepo_tag_filtering_with_prefix() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            (tag: search/v0.3.0) We know what we are, but know not what we may be
+            (tag: ui/v0.2.0) All that glisters is not gold
+            (tag: search/v0.2.0) The web of our life is of a mingled yarn
+            (tag: ui/v0.1.0) Parting is such sweet sorrow
+            (tag: search/v0.1.0) There is nothing either good or bad, but thinking makes it so
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+        let commits = git_repo.history(Some("search/v0.3.0".to_string()), None)?;
+
+        assert_eq!(commits.len(), 2);
+        assert_eq!(
+            commits[0].first_line,
+            "We know what we are, but know not what we may be"
+        );
+        assert_eq!(commits[1].first_line, "All that glisters is not gold");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_monorepo_mixed_tags_isolation() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            (tag: v2.0.0) When sorrows come, they come not single spies, but in battalions
+            (tag: search/v0.2.0) The rest is silence
+            (tag: v1.0.0) We are such stuff as dreams are made on
+            (tag: search/v0.1.0) Give every man thy ear, but few thy voice
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+        let commits = git_repo.history(Some("v2.0.0".to_string()), None)?;
+
+        assert_eq!(commits.len(), 2);
+        assert_eq!(
+            commits[0].first_line,
+            "When sorrows come, they come not single spies, but in battalions"
+        );
+        assert_eq!(commits[1].first_line, "The rest is silence");
+
+        let commits = git_repo.history(Some("search/v0.2.0".to_string()), None)?;
+
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].first_line, "The rest is silence");
+        assert_eq!(
+            commits[1].first_line,
+            "We are such stuff as dreams are made on"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_monorepo_auto_detection_from_head() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            Love all, trust a few, do wrong to none
+            Conscience does make cowards of us all
+            (tag: search/v0.1.0) How poor are they that have not patience
+            (tag: ui/v0.1.0) O, wonder! How many goodly creatures are there here
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+        let commits = git_repo.history(None, None)?;
+
+        assert_eq!(commits.len(), 4);
+        assert_eq!(
+            commits[0].first_line,
+            "Love all, trust a few, do wrong to none"
+        );
+        assert_eq!(
+            commits[1].first_line,
+            "Conscience does make cowards of us all"
+        );
+        assert_eq!(
+            commits[2].first_line,
+            "How poor are they that have not patience"
+        );
+        assert_eq!(
+            commits[3].first_line,
+            "O, wonder! How many goodly creatures are there here"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_monorepo_multiple_slashes_in_prefix() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            (tag: component/sub/v0.2.0) What is past is prologue
+            (tag: component/sub/v0.1.0) The fool doth think he is wise
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+
+        let commits = git_repo.history(Some("component/sub/v0.2.0".to_string()), None)?;
+
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].first_line, "What is past is prologue");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_monorepo_tag_without_v_prefix() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            (tag: search/0.2.0) Be not afraid of greatness
+            (tag: search/0.1.0) Some rise by sin, and some by virtue fall
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+
+        let commits = git_repo.history(Some("search/0.2.0".to_string()), None)?;
+
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].first_line, "Be not afraid of greatness");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_monorepo_different_prefixes_isolated() -> Result<()> {
+        let test_repo = TestRepo::from_log(
+            "
+            (tag: search/v0.3.0) Now is the winter of our discontent
+            (tag: ui/v0.3.0) A rose by any other name would smell as sweet
+            (tag: search/v0.2.0) Hell is empty and all the devils are here
+            (tag: ui/v0.2.0) The course of true love never did run smooth
+            (tag: search/v0.1.0) There are more things in heaven and earth, Horatio
+            (tag: ui/v0.1.0) Good night, good night! Parting is such sweet sorrow
+        ",
+        )?;
+
+        let git_repo = GitRepo::open(test_repo.path())?;
+        let commits = git_repo.history(Some("search/v0.3.0".to_string()), None)?;
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].first_line, "Now is the winter of our discontent");
+        assert_eq!(
+            commits[1].first_line,
+            "A rose by any other name would smell as sweet"
+        );
+
+        let commits = git_repo.history(Some("ui/v0.3.0".to_string()), None)?;
+        assert_eq!(commits.len(), 2);
+        assert_eq!(
+            commits[0].first_line,
+            "A rose by any other name would smell as sweet"
+        );
+        assert_eq!(
+            commits[1].first_line,
+            "Hell is empty and all the devils are here"
+        );
 
         Ok(())
     }

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use git2::{Oid, Repository, Sort};
+use git2::{DiffOptions, Oid, Repository, Sort};
 use semver::Version;
 use serde::Serialize;
 
@@ -13,6 +13,7 @@ struct Tag {
 
 pub struct GitRepo {
     repo: Repository,
+    path_filter: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -82,10 +83,39 @@ impl Commit {
 
 impl GitRepo {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let repo = Repository::open(path)
-            .context("failed to open git repository at the specified location")?;
+        let provided_path = path.as_ref();
+        let abs_path = if provided_path.is_absolute() {
+            provided_path.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .context("failed to get current directory")?
+                .join(provided_path)
+        };
 
-        Ok(GitRepo { repo })
+        let repo = Repository::discover(&abs_path)
+            .context("failed to find git repository from the specified location")?;
+
+        let work_dir = repo
+            .workdir()
+            .context("repository has no working directory")?;
+
+        let canonical_abs_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
+        let canonical_work_dir = work_dir
+            .canonicalize()
+            .unwrap_or_else(|_| work_dir.to_path_buf());
+
+        let path_filter = if canonical_abs_path.starts_with(&canonical_work_dir)
+            && canonical_abs_path != canonical_work_dir
+        {
+            canonical_abs_path
+                .strip_prefix(&canonical_work_dir)
+                .ok()
+                .map(|p| p.to_path_buf())
+        } else {
+            None
+        };
+
+        Ok(GitRepo { repo, path_filter })
     }
 
     fn detect_prefix_from_from_ref(&self, from_ref: &Option<String>) -> Result<Option<String>> {
@@ -237,6 +267,10 @@ impl GitRepo {
             to_ref.map_or_else(|| "".to_string(), |v| format!(" to {}", v)),
         );
 
+        if let Some(ref path) = self.path_filter {
+            log::info!("filtering commits to path: {}", path.display());
+        }
+
         let mut commits = Vec::new();
         let mut revwalk = self
             .repo
@@ -255,6 +289,13 @@ impl GitRepo {
                 .repo
                 .find_commit(oid?)
                 .context("failed to find commit")?;
+
+            if let Some(ref path) = self.path_filter
+                && !Self::commit_touches_path(&self.repo, &git_commit, path)?
+            {
+                continue;
+            }
+
             commits.push(Commit::from_git2_commit(&git_commit));
         }
         Ok(commits)
@@ -278,6 +319,36 @@ impl GitRepo {
 
         Ok(None)
     }
+
+    fn commit_touches_path(repo: &Repository, commit: &git2::Commit, path: &Path) -> Result<bool> {
+        let mut path_str = path.to_string_lossy().to_string();
+
+        if !path_str.ends_with('/') {
+            path_str.push('/');
+        }
+
+        match commit.parent_count() {
+            0 => {
+                let tree = commit.tree()?;
+                let pathspec = git2::Pathspec::new(std::iter::once(path_str.as_str()))?;
+                let matches = pathspec.match_tree(&tree, git2::PathspecFlags::empty())?;
+                Ok(matches.entries().count() > 0)
+            }
+            _ => {
+                let parent = commit.parent(0)?;
+                let mut diff_opts = DiffOptions::new();
+                diff_opts.pathspec(&path_str);
+
+                let diff = repo.diff_tree_to_tree(
+                    Some(&parent.tree()?),
+                    Some(&commit.tree()?),
+                    Some(&mut diff_opts),
+                )?;
+
+                Ok(diff.deltas().count() > 0)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -290,6 +361,7 @@ mod tests {
         _temp_dir: TempDir,
         repo: Repository,
         pub commits: Vec<Oid>,
+        commit_counter: usize,
     }
 
     impl TestRepo {
@@ -305,6 +377,7 @@ mod tests {
                 _temp_dir: temp_dir,
                 repo,
                 commits: Vec::new(),
+                commit_counter: 0,
             })
         }
 
@@ -346,17 +419,75 @@ mod tests {
             (tags, remaining.trim())
         }
 
+        fn write_file(&self, path: &str, content: &str) -> Result<()> {
+            let file_path = self._temp_dir.path().join(path);
+            if let Some(parent) = file_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(file_path, content)?;
+            Ok(())
+        }
+
         fn commit(&mut self, message: &str) -> Result<Oid> {
+            self.commit_counter += 1;
+            let file_path = format!("file{}.txt", self.commit_counter);
+            let content = format!("Content for commit: {}", message);
+            self.write_file(&file_path, &content)?;
+
+            let mut index = self.repo.index()?;
+
+            if !self.commits.is_empty() {
+                let parent_commit = self.repo.find_commit(*self.commits.last().unwrap())?;
+                let parent_tree = parent_commit.tree()?;
+                index.read_tree(&parent_tree)?;
+            }
+
+            index.add_path(Path::new(&file_path))?;
+            index.write()?;
+
+            let tree_id = index.write_tree()?;
+            let tree = self.repo.find_tree(tree_id)?;
+
             let timestamp = 1234567890 + self.commits.len() as i64;
             let sig = Signature::new("Test User", "test@example.com", &Time::new(timestamp, 0))?;
 
-            let tree = if let Some(parent_oid) = self.commits.last() {
-                let parent = self.repo.find_commit(*parent_oid)?;
-                parent.tree()?
+            let parent_commit = if self.commits.is_empty() {
+                None
             } else {
-                let tree_id = self.repo.treebuilder(None)?.write()?;
-                self.repo.find_tree(tree_id)?
+                Some(self.repo.find_commit(*self.commits.last().unwrap())?)
             };
+
+            let parents: Vec<_> = parent_commit.iter().collect();
+            let oid = self
+                .repo
+                .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
+
+            self.commits.push(oid);
+            Ok(oid)
+        }
+
+        fn commit_in_path(&mut self, path: &str, message: &str) -> Result<Oid> {
+            self.commit_counter += 1;
+            let file_path = format!("{}/file{}.txt", path, self.commit_counter);
+            let content = format!("Content for commit: {}", message);
+            self.write_file(&file_path, &content)?;
+
+            let mut index = self.repo.index()?;
+
+            if !self.commits.is_empty() {
+                let parent_commit = self.repo.find_commit(*self.commits.last().unwrap())?;
+                let parent_tree = parent_commit.tree()?;
+                index.read_tree(&parent_tree)?;
+            }
+
+            index.add_path(Path::new(&file_path))?;
+            index.write()?;
+
+            let tree_id = index.write_tree()?;
+            let tree = self.repo.find_tree(tree_id)?;
+
+            let timestamp = 1234567890 + self.commits.len() as i64;
+            let sig = Signature::new("Test User", "test@example.com", &Time::new(timestamp, 0))?;
 
             let parent_commit = if self.commits.is_empty() {
                 None
@@ -678,6 +809,84 @@ mod tests {
             commits[1].first_line,
             "Hell is empty and all the devils are here"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_filtering_subdirectory() -> Result<()> {
+        let mut test_repo = TestRepo::new()?;
+
+        test_repo.commit("To thine own self be true")?;
+        let tag1_oid = test_repo.commit("Neither a borrower nor a lender be")?;
+
+        test_repo.commit_in_path("ui", "All the world's a stage")?;
+        test_repo.commit_in_path("ui", "And all the men and women merely players")?;
+        test_repo.create_tag("v1.0.0", tag1_oid)?;
+
+        let ui_dir = test_repo.path().join("ui");
+        let git_repo = GitRepo::open(&ui_dir)?;
+
+        let commits = git_repo.history(None, None)?;
+        assert_eq!(commits.len(), 2);
+        assert_eq!(
+            commits[0].first_line,
+            "And all the men and women merely players"
+        );
+        assert_eq!(commits[1].first_line, "All the world's a stage");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_filtering_with_tag_detection() -> Result<()> {
+        let mut test_repo = TestRepo::new()?;
+
+        test_repo.commit("The fault, dear Brutus, is not in our stars")?;
+        test_repo.commit_in_path("search", "But in ourselves, that we are underlings")?;
+        let tag1_oid = test_repo.commit("Uneasy lies the head that wears a crown")?;
+        test_repo.commit_in_path("search", "Friends, Romans, countrymen, lend me your ears")?;
+        let tag2_oid =
+            test_repo.commit_in_path("search", "I come to bury Caesar, not to praise him")?;
+        test_repo.commit("The evil that men do lives after them")?;
+
+        test_repo.create_tag("v1.0.0", tag1_oid)?;
+        test_repo.create_tag("v2.0.0", tag2_oid)?;
+
+        let search_dir = test_repo.path().join("search");
+        let git_repo = GitRepo::open(&search_dir)?;
+
+        let commits = git_repo.history(Some("v2.0.0".to_string()), None)?;
+        assert_eq!(commits.len(), 2);
+        assert_eq!(
+            commits[0].first_line,
+            "I come to bury Caesar, not to praise him"
+        );
+        assert_eq!(
+            commits[1].first_line,
+            "Friends, Romans, countrymen, lend me your ears"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_filtering_nested_subdirectory() -> Result<()> {
+        let mut test_repo = TestRepo::new()?;
+
+        test_repo.commit("The readiness is all")?;
+        test_repo.commit_in_path("src", "There is nothing either good or bad")?;
+        test_repo.commit_in_path("src/components", "But thinking makes it so")?;
+        test_repo.commit_in_path("src/components", "To be or not to be")?;
+        test_repo.commit_in_path("src/utils", "That is the question")?;
+
+        let components_dir = test_repo.path().join("src/components");
+        let git_repo = GitRepo::open(&components_dir)?;
+
+        let commits = git_repo.history(None, None)?;
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].first_line, "To be or not to be");
+        assert_eq!(commits[1].first_line, "But thinking makes it so");
 
         Ok(())
     }

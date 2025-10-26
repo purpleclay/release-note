@@ -31,8 +31,12 @@ struct Args {
     #[arg(value_name = "TO", required = false, verbatim_doc_comment)]
     to: Option<String>,
 
-    /// Path to the root working directory of a repository
-    #[arg(value_name = "DIR", long, default_value = ".")]
+    /// Path to a directory within the repository.
+    ///
+    /// Can be:
+    ///  - Repository root (default: ".") - shows all commits.
+    ///  - A subdirectory (e.g., "ui/") - filters commits to only those affecting that directory.
+    #[arg(value_name = "DIR", long, default_value = ".", verbatim_doc_comment)]
     path: PathBuf,
 
     /// Enable verbose logging
@@ -62,7 +66,8 @@ fn main() -> Result<()> {
             .init();
     }
 
-    let repo = GitRepo::open(args.path)?;
+    let repo = GitRepo::open(&args.path)?;
+
     let history = repo.history(args.from, args.to)?;
     let categorized = CommitAnalyzer::analyze(&history);
     log::info!("");

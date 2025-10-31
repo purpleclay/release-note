@@ -2,12 +2,9 @@ use anyhow::Result;
 use clap::{Parser, arg};
 use std::path::PathBuf;
 
-use crate::analyzer::CommitAnalyzer;
-use crate::git::GitRepo;
-
-mod analyzer;
-mod git;
-mod markdown;
+use release_note::analyzer::CommitAnalyzer;
+use release_note::git::GitRepo;
+use release_note::markdown;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));

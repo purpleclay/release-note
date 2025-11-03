@@ -1,0 +1,5 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+

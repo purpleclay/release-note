@@ -1,8 +1,12 @@
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::git::Commit;
+
+static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^([a-z]+)(?:\(([a-z-]+)\))?!?:\s+.+").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
 pub enum CommitCategory {
@@ -91,9 +95,7 @@ impl CommitAnalyzer {
     }
 
     fn parse_conventional_commit(first_line: &str) -> Option<(&str, Option<&str>)> {
-        let re = Regex::new(r"^([a-z]+)(?:\(([a-z-]+)\))?!?:\s+.+").unwrap();
-
-        if let Some(captures) = re.captures(first_line) {
+        if let Some(captures) = CONVENTIONAL_COMMIT_PREFIX.captures(first_line) {
             let commit_type = captures.get(1)?.as_str();
             let scope = captures.get(2).map(|m| m.as_str());
             Some((commit_type, scope))

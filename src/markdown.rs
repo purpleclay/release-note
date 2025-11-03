@@ -65,6 +65,10 @@ fn wrap_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Val
 }
 
 pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
+    if categorized.by_category.is_empty() {
+        return Ok(String::new());
+    }
+
     let mut tera = tera::Tera::default();
     tera.add_raw_template("main", TEMPLATE)
         .context("failed to parse template")?;

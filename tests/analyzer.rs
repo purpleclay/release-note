@@ -1,34 +1,7 @@
+mod commit;
+
+use commit::CommitBuilder;
 use release_note::analyzer::{CommitAnalyzer, CommitCategory};
-use release_note::git::Commit;
-
-struct CommitBuilder {
-    first_line: String,
-    footer: Option<String>,
-}
-
-impl CommitBuilder {
-    fn new(first_line: &str) -> Self {
-        Self {
-            first_line: first_line.to_string(),
-            footer: None,
-        }
-    }
-
-    fn with_footer(mut self, footer: &str) -> Self {
-        self.footer = Some(footer.to_string());
-        self
-    }
-
-    fn build(self) -> Commit {
-        Commit {
-            hash: "".to_string(),
-            first_line: self.first_line,
-            body: None,
-            footer: self.footer,
-            author: "".to_string(),
-        }
-    }
-}
 
 #[test]
 fn categorizes_commits() {

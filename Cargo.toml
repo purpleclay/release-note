@@ -25,4 +25,5 @@ textwrap = "0.16"
 built = { version = "0.8.0", features = ["git2", "semver", "chrono"] }
 
 [dev-dependencies]
+insta = "1.43"
 tempfile = "3.14"

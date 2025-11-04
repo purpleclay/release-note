@@ -6,11 +6,14 @@ use std::collections::HashMap;
 use crate::git::Commit;
 
 static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([a-z]+)(?:\(([a-z-]+)\))?(!)?:\s+.+").unwrap());
+    Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([a-z-]+)\))?(!)?(?:\s*):(?:\s*).+").unwrap());
 
-struct ConventionalCommit<'a> {
-    commit_type: &'a str,
-    scope: Option<&'a str>,
+static BREAKING_FOOTER: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)^BREAKING[- ]CHANGES?:").unwrap());
+
+struct ConventionalCommit {
+    commit_type: String,
+    scope: Option<String>,
     breaking: bool,
 }
 
@@ -70,11 +73,11 @@ impl CommitAnalyzer {
                 return CommitCategory::Breaking;
             }
 
-            if parsed.scope == Some("deps") {
+            if parsed.scope.as_deref() == Some("deps") {
                 return CommitCategory::Dependencies;
             }
 
-            match parsed.commit_type {
+            match parsed.commit_type.as_str() {
                 "feat" => CommitCategory::Feature,
                 "fix" => CommitCategory::Fix,
                 "docs" => CommitCategory::Documentation,
@@ -91,18 +94,16 @@ impl CommitAnalyzer {
     }
 
     fn has_breaking_footer(commit: &Commit) -> bool {
-        if let Some(footer) = &commit.footer
-            && footer.starts_with("BREAKING CHANGE:")
-        {
-            return true;
+        if let Some(footer) = &commit.footer {
+            return BREAKING_FOOTER.is_match(footer);
         }
         false
     }
 
-    fn parse_conventional_commit(first_line: &str) -> Option<ConventionalCommit<'_>> {
+    fn parse_conventional_commit(first_line: &str) -> Option<ConventionalCommit> {
         if let Some(captures) = CONVENTIONAL_COMMIT_PREFIX.captures(first_line) {
-            let commit_type = captures.get(1)?.as_str();
-            let scope = captures.get(2).map(|m| m.as_str());
+            let commit_type = captures.get(1)?.as_str().to_lowercase();
+            let scope = captures.get(2).map(|m| m.as_str().to_lowercase());
             let breaking = captures.get(3).is_some();
 
             Some(ConventionalCommit {

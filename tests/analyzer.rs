@@ -72,13 +72,13 @@ fn categorizes_by_breaking_change_in_footer() {
 #[test]
 fn categorizes_breaking_change_by_hash_bang() {
     let commit =
-        CommitBuilder::new("refactor!: when sorrows come, they come not single spies").build();
+        CommitBuilder::new("refactor(ui)!: when sorrows come, they come not single spies").build();
     let result = CommitAnalyzer::analyze(&[commit]);
     let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
     assert_eq!(breaking.len(), 1);
     assert_eq!(
         breaking[0].first_line,
-        "refactor!: when sorrows come, they come not single spies"
+        "refactor(ui)!: when sorrows come, they come not single spies"
     );
 }
 

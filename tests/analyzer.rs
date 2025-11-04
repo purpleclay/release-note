@@ -133,3 +133,95 @@ fn categorizes_by_dependency_scope() {
         .unwrap();
     assert_eq!(deps.len(), 5);
 }
+
+#[test]
+fn supports_mixed_case_commit_types() {
+    let commits = vec![
+        CommitBuilder::new("FEAT: a rose by any other name would smell as sweet").build(),
+        CommitBuilder::new("Fix: the world's mine oyster").build(),
+        CommitBuilder::new("Docs: we know what we are, but know not what we may be").build(),
+        CommitBuilder::new("ChOrE: this above all: to thine own self be true").build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    assert_eq!(
+        result
+            .by_category
+            .get(&CommitCategory::Feature)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        result.by_category.get(&CommitCategory::Fix).unwrap().len(),
+        1
+    );
+    assert_eq!(
+        result
+            .by_category
+            .get(&CommitCategory::Documentation)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        result
+            .by_category
+            .get(&CommitCategory::Chore)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn supports_flexible_spacing_in_commit_format() {
+    let commits = vec![
+        CommitBuilder::new("feat:the readiness is all").build(),
+        CommitBuilder::new("fix:  strong reasons make strong actions").build(),
+        CommitBuilder::new("feat(scope):delays have dangerous ends").build(),
+        CommitBuilder::new("fix(scope) :  a man can die but once").build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    assert_eq!(
+        result
+            .by_category
+            .get(&CommitCategory::Feature)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        result.by_category.get(&CommitCategory::Fix).unwrap().len(),
+        2
+    );
+}
+
+#[test]
+fn supports_flexible_breaking_footer_formats() {
+    let commits = vec![
+        CommitBuilder::new("fix: frailty, thy name is woman")
+            .with_footer("BREAKING CHANGE: with mirth and laughter let old wrinkles come")
+            .build(),
+        CommitBuilder::new("feat: expectation is the root of all heartache")
+            .with_footer("BREAKING-CHANGE: misery acquaints a man with strange bedfellows")
+            .build(),
+        CommitBuilder::new("chore: uneasy lies the head that wears a crown")
+            .with_footer("breaking change: what's done is done")
+            .build(),
+        CommitBuilder::new("docs: some are born great")
+            .with_footer("Breaking-Changes: some achieve greatness")
+            .build(),
+        CommitBuilder::new("test: out, out, brief candle")
+            .with_footer("BREAKING CHANGES: life's but a walking shadow")
+            .build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert_eq!(breaking.len(), 5);
+}

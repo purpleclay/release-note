@@ -6,21 +6,27 @@ use std::collections::HashMap;
 use crate::git::Commit;
 
 static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([a-z]+)(?:\(([a-z-]+)\))?!?:\s+.+").unwrap());
+    Lazy::new(|| Regex::new(r"^([a-z]+)(?:\(([a-z-]+)\))?(!)?:\s+.+").unwrap());
+
+struct ConventionalCommit<'a> {
+    commit_type: &'a str,
+    scope: Option<&'a str>,
+    breaking: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
 pub enum CommitCategory {
     Breaking,
-    Feature,
-    Fix,
+    Chore,
+    CI,
     Dependencies,
     Documentation,
-    CI,
-    Test,
-    Performance,
-    Chore,
+    Feature,
+    Fix,
     Other,
+    Performance,
     Refactor,
+    Test,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,16 +61,20 @@ impl CommitAnalyzer {
     }
 
     fn categorize(commit: &Commit) -> CommitCategory {
-        if Self::is_breaking(commit) {
+        if Self::has_breaking_footer(commit) {
             return CommitCategory::Breaking;
         }
 
-        if let Some((commit_type, scope)) = Self::parse_conventional_commit(&commit.first_line) {
-            if scope == Some("deps") {
+        if let Some(parsed) = Self::parse_conventional_commit(&commit.first_line) {
+            if parsed.breaking {
+                return CommitCategory::Breaking;
+            }
+
+            if parsed.scope == Some("deps") {
                 return CommitCategory::Dependencies;
             }
 
-            match commit_type {
+            match parsed.commit_type {
                 "feat" => CommitCategory::Feature,
                 "fix" => CommitCategory::Fix,
                 "docs" => CommitCategory::Documentation,
@@ -80,25 +90,26 @@ impl CommitAnalyzer {
         }
     }
 
-    fn is_breaking(commit: &Commit) -> bool {
-        if commit.first_line.contains("!:") {
-            return true;
-        }
-
+    fn has_breaking_footer(commit: &Commit) -> bool {
         if let Some(footer) = &commit.footer
             && footer.starts_with("BREAKING CHANGE:")
         {
             return true;
         }
-
         false
     }
 
-    fn parse_conventional_commit(first_line: &str) -> Option<(&str, Option<&str>)> {
+    fn parse_conventional_commit(first_line: &str) -> Option<ConventionalCommit<'_>> {
         if let Some(captures) = CONVENTIONAL_COMMIT_PREFIX.captures(first_line) {
             let commit_type = captures.get(1)?.as_str();
             let scope = captures.get(2).map(|m| m.as_str());
-            Some((commit_type, scope))
+            let breaking = captures.get(3).is_some();
+
+            Some(ConventionalCommit {
+                commit_type,
+                scope,
+                breaking,
+            })
         } else {
             None
         }

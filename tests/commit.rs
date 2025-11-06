@@ -22,6 +22,8 @@ pub struct CommitBuilder {
     body: Option<String>,
     footer: Option<String>,
     author: Option<String>,
+    email: Option<String>,
+    contributor: Option<String>,
 }
 
 impl CommitBuilder {
@@ -32,6 +34,8 @@ impl CommitBuilder {
             body: None,
             footer: None,
             author: None,
+            email: None,
+            contributor: None,
         }
     }
 
@@ -55,6 +59,16 @@ impl CommitBuilder {
         self
     }
 
+    pub fn with_email(mut self, email: &str) -> Self {
+        self.email = Some(email.to_string());
+        self
+    }
+
+    pub fn with_contributor(mut self, contributor: &str) -> Self {
+        self.contributor = Some(contributor.to_string());
+        self
+    }
+
     pub fn build(self) -> Commit {
         let hash = self.hash.unwrap_or_else(|| generate_hash(&self.first_line));
         Commit {
@@ -62,7 +76,9 @@ impl CommitBuilder {
             first_line: self.first_line,
             body: self.body,
             footer: self.footer,
-            author: self.author.unwrap_or("will@globe-theatre.com".to_string()),
+            author: self.author.unwrap_or("William Shakespeare".to_string()),
+            email: self.email.unwrap_or("will@globe-theatre.com".to_string()),
+            contributor: self.contributor,
         }
     }
 }

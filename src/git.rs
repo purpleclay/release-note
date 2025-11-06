@@ -14,6 +14,7 @@ struct Tag {
 pub struct GitRepo {
     repo: Repository,
     path_filter: Option<PathBuf>,
+    origin_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -23,12 +24,15 @@ pub struct Commit {
     pub body: Option<String>,
     pub footer: Option<String>,
     pub author: String,
+    pub email: String,
+    pub contributor: Option<String>,
 }
 
 impl Commit {
     fn from_git2_commit(commit: &git2::Commit) -> Self {
         let hash = commit.id().to_string();
         let author = commit.author().name().unwrap_or_default().to_string();
+        let email = commit.author().email().unwrap_or_default().to_string();
 
         let message = commit.message().unwrap_or_default();
         let lines: Vec<&str> = message.lines().collect();
@@ -77,11 +81,17 @@ impl Commit {
             body,
             footer,
             author,
+            email,
+            contributor: None,
         }
     }
 }
 
 impl GitRepo {
+    pub fn origin_url(&self) -> Option<&str> {
+        self.origin_url.as_deref()
+    }
+
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let provided_path = path.as_ref();
         let abs_path = if provided_path.is_absolute() {
@@ -115,7 +125,16 @@ impl GitRepo {
             None
         };
 
-        Ok(GitRepo { repo, path_filter })
+        let origin_url = repo
+            .find_remote("origin")
+            .ok()
+            .and_then(|remote| remote.url().map(|s| s.to_string()));
+
+        Ok(GitRepo {
+            repo,
+            path_filter,
+            origin_url,
+        })
     }
 
     fn is_semver_tag(tag_name: &str) -> bool {

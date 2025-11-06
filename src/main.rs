@@ -3,6 +3,7 @@ use clap::{Parser, arg};
 use std::path::PathBuf;
 
 use release_note::analyzer::CommitAnalyzer;
+use release_note::contributor;
 use release_note::git::GitRepo;
 use release_note::markdown;
 
@@ -64,8 +65,14 @@ fn main() -> Result<()> {
     }
 
     let repo = GitRepo::open(&args.path)?;
+    let mut history = repo.history(args.from, args.to)?;
 
-    let history = repo.history(args.from, args.to)?;
+    if let Some(url) = repo.origin_url()
+        && let Ok(Some(mut resolver)) = contributor::ContributorResolver::from_url(url)
+    {
+        resolver.resolve_contributors(&mut history);
+    }
+
     let categorized = CommitAnalyzer::analyze(&history);
     log::info!("");
 

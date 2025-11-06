@@ -51,6 +51,7 @@ impl CommitAnalyzer {
                 .push(commit.clone());
         }
 
+        log::info!("attempting to categorize commits");
         for (category, commits) in &by_category {
             log::info!(
                 "  * {}: {} commit{}",

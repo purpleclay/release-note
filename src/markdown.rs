@@ -6,7 +6,7 @@ use tera::Value;
 pub const TEMPLATE: &str = r#"{%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit.hash }} {{ commit.first_line }}
+- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
 {%- if commit.body %}
 
 {{ commit.body | wrap(width=80) | indent(prefix = "  ", first=true) }}
@@ -17,7 +17,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit.hash }} {{ commit.first_line }}
+- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
 {%- if commit.body %}
 
 {{ commit.body | wrap | indent(prefix = "  ", first=true) }}
@@ -28,7 +28,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit.hash }} {{ commit.first_line }}
+- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
 {%- if commit.body %}
 
 {{ commit.body | wrap | indent(prefix = "  ", first=true) }}
@@ -39,7 +39,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 {%- if dependencies %}
 ## Dependency Updates
 {%- for commit in dependencies %}
-- {{ commit.hash }} {{ commit.first_line }}
+- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
 {%- if commit.body %}
 
 {{ commit.body | wrap | indent(prefix = "  ", first=true) }}

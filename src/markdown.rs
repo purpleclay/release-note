@@ -9,7 +9,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 - {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
 {%- if commit.body %}
 
-{{ commit.body | wrap(width=80) | indent(prefix = "  ", first=true) }}
+{{ commit.body | wrap | indent(prefix = "  ", first=true) }}
 {%- endif %}
 {%- endfor %}
 
@@ -57,10 +57,24 @@ fn wrap_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Val
 
     let width = args.get("width").and_then(|v| v.as_u64()).unwrap_or(80) as usize;
 
-    let (unwrapped, _) = textwrap::unfill(text);
+    let options = textwrap::Options::new(width)
+        .break_words(false)
+        .wrap_algorithm(textwrap::WrapAlgorithm::OptimalFit(
+            textwrap::wrap_algorithms::Penalties::default(),
+        ));
 
-    let options = textwrap::Options::new(width);
-    let wrapped = textwrap::fill(&unwrapped, options);
+    let wrapped = text
+        .lines()
+        .map(|line| {
+            if line.trim().is_empty() {
+                String::new()
+            } else {
+                textwrap::fill(line, options.clone())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
     Ok(Value::String(wrapped))
 }
 

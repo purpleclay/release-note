@@ -1,5 +1,6 @@
 ---
 source: tests/markdown.rs
+assertion_line: 111
 expression: result
 ---
 ## New Features
@@ -8,9 +9,11 @@ expression: result
   Though this be madness, yet there is method in't.
 - 51eafb29bc0a294f51eafb29bc0a294f51eafb29 feat: brevity is the soul of wit
 
-  To be, or not to be, that is the question: - Whether 'tis nobler in the mind to
-  suffer - The slings and arrows of outrageous fortune Or to take arms against a
-  sea of troubles.
+  To be, or not to be, that is the question:
+  - Whether 'tis nobler in the mind to suffer
+  - The slings and arrows of outrageous fortune
+
+  Or to take arms against a sea of troubles.
 ## Bug Fixes
 - 57b850ba6d18ab8157b850ba6d18ab8157b850ba fix: something is rotten in the state of Denmark
 

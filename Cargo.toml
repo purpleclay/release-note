@@ -21,7 +21,7 @@ semver = "1.0.27"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0"
 tera = "1.20.0"
-textwrap = "0.16"
+textwrap = { version = "0.16", features = ["smawk"] }
 
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2", "semver", "chrono"] }

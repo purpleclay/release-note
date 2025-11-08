@@ -95,8 +95,8 @@ impl CommitAnalyzer {
     }
 
     fn has_breaking_footer(commit: &Commit) -> bool {
-        if let Some(footer) = &commit.footer {
-            return BREAKING_FOOTER.is_match(footer);
+        if let Some(body) = &commit.body {
+            return BREAKING_FOOTER.is_match(body);
         }
         false
     }

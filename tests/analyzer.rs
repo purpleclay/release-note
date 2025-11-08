@@ -58,7 +58,7 @@ fn categorizes_commits() {
 #[test]
 fn categorizes_by_breaking_change_in_footer() {
     let commit = CommitBuilder::new("fix: the course of true love never did run smooth")
-        .with_footer("BREAKING CHANGE: but in battalions")
+        .with_body("BREAKING CHANGE: but in battalions")
         .build();
     let result = CommitAnalyzer::analyze(&[commit]);
     let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
@@ -204,19 +204,19 @@ fn supports_flexible_spacing_in_commit_format() {
 fn supports_flexible_breaking_footer_formats() {
     let commits = vec![
         CommitBuilder::new("fix: frailty, thy name is woman")
-            .with_footer("BREAKING CHANGE: with mirth and laughter let old wrinkles come")
+            .with_body("BREAKING CHANGE: with mirth and laughter let old wrinkles come")
             .build(),
         CommitBuilder::new("feat: expectation is the root of all heartache")
-            .with_footer("BREAKING-CHANGE: misery acquaints a man with strange bedfellows")
+            .with_body("BREAKING-CHANGE: misery acquaints a man with strange bedfellows")
             .build(),
         CommitBuilder::new("chore: uneasy lies the head that wears a crown")
-            .with_footer("breaking change: what's done is done")
+            .with_body("breaking change: what's done is done")
             .build(),
         CommitBuilder::new("docs: some are born great")
-            .with_footer("Breaking-Changes: some achieve greatness")
+            .with_body("Breaking-Changes: some achieve greatness")
             .build(),
         CommitBuilder::new("test: out, out, brief candle")
-            .with_footer("BREAKING CHANGES: life's but a walking shadow")
+            .with_body("BREAKING CHANGES: life's but a walking shadow")
             .build(),
     ];
 

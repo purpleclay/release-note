@@ -3,8 +3,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use git2::{DiffOptions, Oid, Repository, Sort};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use semver::Version;
 use serde::Serialize;
+
+static GIT_TRAILER: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^([A-Za-z][\w-]*)\s*:\s*(.+)$").unwrap());
 
 struct Tag {
     name: String,
@@ -18,11 +23,17 @@ pub struct GitRepo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Trailer {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Commit {
     pub hash: String,
     pub first_line: String,
     pub body: Option<String>,
-    pub footer: Option<String>,
+    pub trailers: Vec<Trailer>,
     pub author: String,
     pub email: String,
     pub contributor: Option<String>,
@@ -38,52 +49,70 @@ impl Commit {
         let lines: Vec<&str> = message.lines().collect();
         let first_line = lines.first().unwrap_or(&"").to_string();
 
-        let (body, footer) = if lines.len() > 1 {
-            let remaining = &lines[1..];
-            if let Some(last_blank_idx) = remaining.iter().rposition(|line| line.trim().is_empty())
-            {
-                let body_lines = &remaining[..last_blank_idx];
-                let footer_lines = &remaining[last_blank_idx + 1..];
-
-                let body_text = body_lines.join("\n").trim().to_string();
-                let footer_text = footer_lines.join("\n").trim().to_string();
-
-                (
-                    if body_text.is_empty() {
-                        None
-                    } else {
-                        Some(body_text)
-                    },
-                    if footer_text.is_empty() {
-                        None
-                    } else {
-                        Some(footer_text)
-                    },
-                )
-            } else {
-                let body_text = remaining.join("\n").trim().to_string();
-                (
-                    if body_text.is_empty() {
-                        None
-                    } else {
-                        Some(body_text)
-                    },
-                    None,
-                )
-            }
+        let (body, trailers) = if lines.len() > 1 {
+            Self::parse_body_and_trailers(&lines[1..])
         } else {
-            (None, None)
+            (None, Vec::new())
         };
 
         Commit {
             hash,
             first_line,
             body,
-            footer,
+            trailers,
             author,
             email,
             contributor: None,
         }
+    }
+
+    fn parse_body_and_trailers(lines: &[&str]) -> (Option<String>, Vec<Trailer>) {
+        let mut trailer_start_idx = lines.len();
+
+        for (i, line) in lines.iter().enumerate().rev() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() && i == trailer_start_idx - 1 {
+                trailer_start_idx = i;
+                continue;
+            }
+
+            if !trimmed.is_empty() && !GIT_TRAILER.is_match(trimmed) {
+                break;
+            }
+
+            if GIT_TRAILER.is_match(trimmed) {
+                trailer_start_idx = i;
+            }
+        }
+
+        let body_lines = &lines[..trailer_start_idx];
+        let first_non_empty = body_lines
+            .iter()
+            .position(|l| !l.trim().is_empty())
+            .unwrap_or(0);
+        let last_non_empty = body_lines
+            .iter()
+            .rposition(|l| !l.trim().is_empty())
+            .map(|i| i + 1)
+            .unwrap_or(0);
+
+        let body = if first_non_empty < last_non_empty {
+            body_lines[first_non_empty..last_non_empty].join("\n")
+        } else {
+            String::new()
+        };
+
+        let trailers: Vec<Trailer> = lines[trailer_start_idx..]
+            .iter()
+            .filter_map(|line| {
+                GIT_TRAILER.captures(line.trim()).map(|caps| Trailer {
+                    key: caps[1].to_string(),
+                    value: caps[2].trim().to_string(),
+                })
+            })
+            .collect();
+
+        (if body.is_empty() { None } else { Some(body) }, trailers)
     }
 }
 

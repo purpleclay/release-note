@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use release_note::git::Commit;
+use release_note::git::{Commit, Trailer};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -20,7 +20,7 @@ pub struct CommitBuilder {
     hash: Option<String>,
     first_line: String,
     body: Option<String>,
-    footer: Option<String>,
+    trailers: Vec<Trailer>,
     author: Option<String>,
     email: Option<String>,
     contributor: Option<String>,
@@ -32,7 +32,7 @@ impl CommitBuilder {
             hash: None,
             first_line: first_line.to_string(),
             body: None,
-            footer: None,
+            trailers: Vec::new(),
             author: None,
             email: None,
             contributor: None,
@@ -49,8 +49,11 @@ impl CommitBuilder {
         self
     }
 
-    pub fn with_footer(mut self, footer: &str) -> Self {
-        self.footer = Some(footer.to_string());
+    pub fn with_trailer(mut self, key: &str, value: &str) -> Self {
+        self.trailers.push(Trailer {
+            key: key.to_string(),
+            value: value.to_string(),
+        });
         self
     }
 
@@ -75,7 +78,7 @@ impl CommitBuilder {
             hash,
             first_line: self.first_line,
             body: self.body,
-            footer: self.footer,
+            trailers: self.trailers,
             author: self.author.unwrap_or("William Shakespeare".to_string()),
             email: self.email.unwrap_or("will@globe-theatre.com".to_string()),
             contributor: self.contributor,

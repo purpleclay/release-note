@@ -75,3 +75,38 @@ fn generates_no_release_note_when_no_commits() {
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn excludes_git_trailers() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: the lady doth protest too much, methinks")
+                .with_body("Though this be madness, yet there is method in't.")
+                .with_trailer("Signed-off-by", "William Shakespeare <will@globe-theatre.com>")
+                .with_trailer("Co-authored-by", "Christopher Marlowe <kit@rose-theatre.com>")
+                .build(),
+            CommitBuilder::new("feat: brevity is the soul of wit")
+                .with_body("To be, or not to be, that is the question:\n- Whether 'tis nobler in the mind to suffer\n- The slings and arrows of outrageous fortune\n\nOr to take arms against a sea of troubles.")
+                .with_trailer("Reviewed-by", "Ben Jonson <ben@theatre.com>")
+                .build(),
+        ],
+    );
+
+    by_category.insert(
+        CommitCategory::Fix,
+        vec![
+            CommitBuilder::new("fix: something is rotten in the state of Denmark")
+                .with_body("The rest is silence.")
+                .with_trailer("Acked-by", "Hamlet <hamlet@elsinore.dk>")
+                .build(),
+        ],
+    );
+
+    let categorized = CategorizedCommits { by_category };
+    let result = markdown::render_history(&categorized).unwrap();
+
+    insta::assert_snapshot!(result);
+}

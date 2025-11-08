@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## New Features
+- 2c834bf8cfb379582c834bf8cfb379582c834bf8 feat: the lady doth protest too much, methinks
+
+  Though this be madness, yet there is method in't.
+- 51eafb29bc0a294f51eafb29bc0a294f51eafb29 feat: brevity is the soul of wit
+
+  To be, or not to be, that is the question: - Whether 'tis nobler in the mind to
+  suffer - The slings and arrows of outrageous fortune Or to take arms against a
+  sea of troubles.
+## Bug Fixes
+- 57b850ba6d18ab8157b850ba6d18ab8157b850ba fix: something is rotten in the state of Denmark
+
+  The rest is silence.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

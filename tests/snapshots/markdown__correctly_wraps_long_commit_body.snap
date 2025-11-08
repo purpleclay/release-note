@@ -1,5 +1,6 @@
 ---
 source: tests/markdown.rs
+assertion_line: 67
 expression: result
 ---
 ## New Features

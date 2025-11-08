@@ -1,5 +1,6 @@
 ---
 source: tests/markdown.rs
+assertion_line: 48
 expression: result
 ---
 ## Breaking Changes

@@ -88,6 +88,10 @@
                 toString script;
               stages = ["prepare-commit-msg"];
             };
+            typos = {
+              enable = true;
+              entry = "${pkgs.typos}/bin/typos";
+            };
           };
         };
       in

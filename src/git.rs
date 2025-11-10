@@ -11,6 +11,12 @@ use serde::Serialize;
 static GIT_TRAILER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([A-Za-z][\w-]*)\s*:\s*(.+)$").unwrap());
 
+static LINKED_ISSUE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^(?i)(?:close[sd]?|fix(?:es|ed)?|resolve(?:s|d)?)(?::\s*|\s+)(?:([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)#(\d+)|#(\d+))$"
+    ).unwrap()
+});
+
 struct Tag {
     name: String,
     oid: Oid,
@@ -28,12 +34,20 @@ pub struct Trailer {
     pub value: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct LinkedIssue {
+    pub number: u32,
+    pub owner: Option<String>,
+    pub repo: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Commit {
     pub hash: String,
     pub first_line: String,
     pub body: Option<String>,
     pub trailers: Vec<Trailer>,
+    pub linked_issues: Vec<LinkedIssue>,
     pub author: String,
     pub email: String,
     pub contributor: Option<String>,
@@ -49,10 +63,10 @@ impl Commit {
         let lines: Vec<&str> = message.lines().collect();
         let first_line = lines.first().unwrap_or(&"").to_string();
 
-        let (body, trailers) = if lines.len() > 1 {
+        let (body, trailers, linked_issues) = if lines.len() > 1 {
             Self::parse_body_and_trailers(&lines[1..])
         } else {
-            (None, Vec::new())
+            (None, Vec::new(), Vec::new())
         };
 
         Commit {
@@ -60,13 +74,25 @@ impl Commit {
             first_line,
             body,
             trailers,
+            linked_issues,
             author,
             email,
             contributor: None,
         }
     }
 
-    fn parse_body_and_trailers(lines: &[&str]) -> (Option<String>, Vec<Trailer>) {
+    fn parse_body_and_trailers(lines: &[&str]) -> (Option<String>, Vec<Trailer>, Vec<LinkedIssue>) {
+        let mut linked_issues = Vec::new();
+        let mut lines_to_strip = std::collections::HashSet::new();
+
+        for (i, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            if LINKED_ISSUE.is_match(trimmed) {
+                linked_issues.extend(Self::extract_linked_issues_from_line(trimmed));
+                lines_to_strip.insert(i);
+            }
+        }
+
         let mut trailer_start_idx = lines.len();
 
         for (i, line) in lines.iter().enumerate().rev() {
@@ -85,7 +111,18 @@ impl Commit {
             }
         }
 
-        let body_lines = &lines[..trailer_start_idx];
+        let body_lines: Vec<&str> = lines[..trailer_start_idx]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| {
+                if lines_to_strip.contains(&i) {
+                    None
+                } else {
+                    Some(*line)
+                }
+            })
+            .collect();
+
         let first_non_empty = body_lines
             .iter()
             .position(|l| !l.trim().is_empty())
@@ -112,7 +149,39 @@ impl Commit {
             })
             .collect();
 
-        (if body.is_empty() { None } else { Some(body) }, trailers)
+        linked_issues.sort_by_key(|i| (i.owner.clone(), i.repo.clone(), i.number));
+        linked_issues.dedup();
+
+        (
+            if body.is_empty() { None } else { Some(body) },
+            trailers,
+            linked_issues,
+        )
+    }
+
+    fn extract_linked_issues_from_line(line: &str) -> Vec<LinkedIssue> {
+        LINKED_ISSUE
+            .captures(line)
+            .map(|cap| {
+                if let Some(num) = cap.get(3) {
+                    // owner/repo#123
+                    vec![LinkedIssue {
+                        number: num.as_str().parse().unwrap(),
+                        owner: cap.get(1).map(|m| m.as_str().to_string()),
+                        repo: cap.get(2).map(|m| m.as_str().to_string()),
+                    }]
+                } else if let Some(num) = cap.get(4) {
+                    // #123 (same repo)
+                    vec![LinkedIssue {
+                        number: num.as_str().parse().unwrap(),
+                        owner: None,
+                        repo: None,
+                    }]
+                } else {
+                    Vec::new()
+                }
+            })
+            .unwrap_or_default()
     }
 }
 

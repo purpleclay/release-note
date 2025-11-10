@@ -178,6 +178,58 @@ fn includes_entire_history_on_first_release() -> Result<()> {
 }
 
 #[test]
+fn extracts_and_strips_linked_issues() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+
+    let message = r#"feat: to thine own self be true
+closes #1
+CLOSE: #2
+closed #3
+fix #4
+fixes: #5
+FIXED #6
+resolve #7
+RESOLVED #8
+resolves: #9
+This above all: to thine own self be true, and it must follow, as the night the day.
+Resolves globe-theatre/hamlet#100
+Thou canst not then be false to any man."#;
+    test_repo.commit(message)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let commits = git_repo.history(None, None)?;
+
+    assert_eq!(commits.len(), 1);
+    assert_eq!(
+        commits[0].body.as_deref(),
+        Some(
+            "This above all: to thine own self be true, and it must follow, as the night the day.\nThou canst not then be false to any man."
+        )
+    );
+
+    assert_eq!(commits[0].linked_issues.len(), 10);
+    assert_eq!(commits[0].linked_issues[0].number, 1);
+    assert_eq!(commits[0].linked_issues[0].owner, None);
+    assert_eq!(commits[0].linked_issues[0].repo, None);
+    assert_eq!(commits[0].linked_issues[1].number, 2);
+    assert_eq!(commits[0].linked_issues[2].number, 3);
+    assert_eq!(commits[0].linked_issues[3].number, 4);
+    assert_eq!(commits[0].linked_issues[4].number, 5);
+    assert_eq!(commits[0].linked_issues[5].number, 6);
+    assert_eq!(commits[0].linked_issues[6].number, 7);
+    assert_eq!(commits[0].linked_issues[7].number, 8);
+    assert_eq!(commits[0].linked_issues[8].number, 9);
+    assert_eq!(commits[0].linked_issues[9].number, 100);
+    assert_eq!(
+        commits[0].linked_issues[9].owner.as_deref(),
+        Some("globe-theatre")
+    );
+    assert_eq!(commits[0].linked_issues[9].repo.as_deref(), Some("hamlet"));
+
+    Ok(())
+}
+
+#[test]
 fn includes_history_between_existing_releases() -> Result<()> {
     let test_repo = TestRepo::from_log(
         "

@@ -79,6 +79,7 @@ impl CommitBuilder {
             first_line: self.first_line,
             body: self.body,
             trailers: self.trailers,
+            linked_issues: Vec::new(),
             author: self.author.unwrap_or("William Shakespeare".to_string()),
             email: self.email.unwrap_or("will@globe-theatre.com".to_string()),
             contributor: self.contributor,

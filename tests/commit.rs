@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use release_note::git::{Commit, Trailer};
+use release_note::git::{Commit, GitTrailer};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -20,7 +20,7 @@ pub struct CommitBuilder {
     hash: Option<String>,
     first_line: String,
     body: Option<String>,
-    trailers: Vec<Trailer>,
+    trailers: Vec<GitTrailer>,
     author: Option<String>,
     email: Option<String>,
     contributor: Option<String>,
@@ -50,10 +50,10 @@ impl CommitBuilder {
     }
 
     pub fn with_trailer(mut self, key: &str, value: &str) -> Self {
-        self.trailers.push(Trailer {
-            key: key.to_string(),
-            value: value.to_string(),
-        });
+        self.trailers.push(GitTrailer::from_key_value(
+            key.to_string(),
+            value.to_string(),
+        ));
         self
     }
 

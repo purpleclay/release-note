@@ -29,9 +29,72 @@ pub struct GitRepo {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Trailer {
-    pub key: String,
-    pub value: String,
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum GitTrailer {
+    #[serde(rename_all = "kebab-case")]
+    CoAuthoredBy {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        email: Option<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    ReviewedBy {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        email: Option<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    SignedOffBy {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        email: Option<String>,
+    },
+    Other {
+        key: String,
+        value: String,
+    },
+}
+
+impl GitTrailer {
+    pub fn from_key_value(key: String, value: String) -> Self {
+        match key.to_lowercase().as_str() {
+            "co-authored-by" => Self::parse_name_email_trailer(value, |name, email| {
+                GitTrailer::CoAuthoredBy { name, email }
+            }),
+            "reviewed-by" => Self::parse_name_email_trailer(value, |name, email| {
+                GitTrailer::ReviewedBy { name, email }
+            }),
+            "signed-off-by" => Self::parse_name_email_trailer(value, |name, email| {
+                GitTrailer::SignedOffBy { name, email }
+            }),
+            _ => GitTrailer::Other { key, value },
+        }
+    }
+
+    fn parse_name_email_trailer<F>(value: String, constructor: F) -> Self
+    where
+        F: FnOnce(String, Option<String>) -> Self,
+    {
+        static EMAIL: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(.+?)\s*[<(]([^>)]+)[>)]$").unwrap());
+
+        if let Some(caps) = EMAIL.captures(value.trim()) {
+            let name = caps[1].trim().to_string();
+            let email = caps[2].trim().to_string();
+            constructor(
+                if name.is_empty() { email.clone() } else { name },
+                if email.contains('@') {
+                    Some(email)
+                } else {
+                    None
+                },
+            )
+        } else if value.contains('@') {
+            constructor(value.clone(), Some(value))
+        } else {
+            constructor(value, None)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -46,7 +109,7 @@ pub struct Commit {
     pub hash: String,
     pub first_line: String,
     pub body: Option<String>,
-    pub trailers: Vec<Trailer>,
+    pub trailers: Vec<GitTrailer>,
     pub linked_issues: Vec<LinkedIssue>,
     pub author: String,
     pub email: String,
@@ -81,7 +144,9 @@ impl Commit {
         }
     }
 
-    fn parse_body_and_trailers(lines: &[&str]) -> (Option<String>, Vec<Trailer>, Vec<LinkedIssue>) {
+    fn parse_body_and_trailers(
+        lines: &[&str],
+    ) -> (Option<String>, Vec<GitTrailer>, Vec<LinkedIssue>) {
         let mut linked_issues = Vec::new();
         let mut lines_to_strip = std::collections::HashSet::new();
 
@@ -139,12 +204,11 @@ impl Commit {
             String::new()
         };
 
-        let trailers: Vec<Trailer> = lines[trailer_start_idx..]
+        let trailers: Vec<GitTrailer> = lines[trailer_start_idx..]
             .iter()
             .filter_map(|line| {
-                GIT_TRAILER.captures(line.trim()).map(|caps| Trailer {
-                    key: caps[1].to_string(),
-                    value: caps[2].trim().to_string(),
+                GIT_TRAILER.captures(line.trim()).map(|caps| {
+                    GitTrailer::from_key_value(caps[1].to_string(), caps[2].trim().to_string())
                 })
             })
             .collect();
@@ -164,14 +228,12 @@ impl Commit {
             .captures(line)
             .map(|cap| {
                 if let Some(num) = cap.get(3) {
-                    // owner/repo#123
                     vec![LinkedIssue {
                         number: num.as_str().parse().unwrap(),
                         owner: cap.get(1).map(|m| m.as_str().to_string()),
                         repo: cap.get(2).map(|m| m.as_str().to_string()),
                     }]
                 } else if let Some(num) = cap.get(4) {
-                    // #123 (same repo)
                     vec![LinkedIssue {
                         number: num.as_str().parse().unwrap(),
                         owner: None,

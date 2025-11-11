@@ -1,6 +1,6 @@
 use anyhow::Result;
 use git2::{Oid, Repository, Signature, Time};
-use release_note::git::GitRepo;
+use release_note::git::{GitRepo, GitTrailer};
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -444,16 +444,20 @@ Co-authored-by: Christopher Marlowe <kit@rose-theatre.com>
         Some("And all the men and women merely players.")
     );
     assert_eq!(commits[0].trailers.len(), 2);
-    assert_eq!(commits[0].trailers[0].key, "Signed-off-by");
-    assert_eq!(
-        commits[0].trailers[0].value,
-        "William Shakespeare <will@globe-theatre.com>"
-    );
-    assert_eq!(commits[0].trailers[1].key, "Co-authored-by");
-    assert_eq!(
-        commits[0].trailers[1].value,
-        "Christopher Marlowe <kit@rose-theatre.com>"
-    );
+    match &commits[0].trailers[0] {
+        GitTrailer::SignedOffBy { name, email } => {
+            assert_eq!(name, "William Shakespeare");
+            assert_eq!(email.as_deref(), Some("will@globe-theatre.com"));
+        }
+        _ => panic!("Expected SignedOffBy trailer"),
+    }
+    match &commits[0].trailers[1] {
+        GitTrailer::CoAuthoredBy { name, email } => {
+            assert_eq!(name, "Christopher Marlowe");
+            assert_eq!(email.as_deref(), Some("kit@rose-theatre.com"));
+        }
+        _ => panic!("Expected CoAuthoredBy trailer"),
+    }
 
     Ok(())
 }
@@ -484,7 +488,13 @@ The slings and arrows of outrageous fortune."#
         )
     );
     assert_eq!(commits[0].trailers.len(), 1);
-    assert_eq!(commits[0].trailers[0].key, "Signed-off-by");
+    match &commits[0].trailers[0] {
+        GitTrailer::SignedOffBy { name, email } => {
+            assert_eq!(name, "William Shakespeare");
+            assert_eq!(email.as_deref(), Some("will@globe-theatre.com"));
+        }
+        _ => panic!("Expected SignedOffBy trailer"),
+    }
 
     Ok(())
 }

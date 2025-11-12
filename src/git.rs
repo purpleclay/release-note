@@ -144,6 +144,11 @@ impl Commit {
         }
     }
 
+    fn normalize_blank_lines(text: &str) -> String {
+        let re = regex::Regex::new(r"\n{3,}").unwrap();
+        re.replace_all(text, "\n\n").to_string()
+    }
+
     fn parse_body_and_trailers(
         lines: &[&str],
     ) -> (Option<String>, Vec<GitTrailer>, Vec<LinkedIssue>) {
@@ -199,7 +204,9 @@ impl Commit {
             .unwrap_or(0);
 
         let body = if first_non_empty < last_non_empty {
-            body_lines[first_non_empty..last_non_empty].join("\n")
+            let joined = body_lines[first_non_empty..last_non_empty].join("\n");
+            // Normalize excessive blank lines (3+ consecutive) to 2 (single paragraph break)
+            Self::normalize_blank_lines(&joined)
         } else {
             String::new()
         };

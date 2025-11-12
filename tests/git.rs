@@ -498,3 +498,74 @@ The slings and arrows of outrageous fortune."#
 
     Ok(())
 }
+
+#[test]
+fn strips_linked_issues_and_normalizes_blank_lines() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+
+    let message = r#"feat: introduce the play within a play
+
+We'll have a play extempore. The play's the thing wherein I'll catch
+the conscience of the king.
+
+
+Closes #42
+Fixes owner/repo#108
+Resolves #256
+
+
+This mechanism allows for the revelation of truth through theatrical
+performance, mirroring reality back to the audience.
+
+Signed-off-by: William Shakespeare <will@globe-theatre.com>
+Co-authored-by: Christopher Marlowe <kit@rose-theatre.com>"#;
+    test_repo.commit(message)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let commits = git_repo.history(None, None)?;
+
+    assert_eq!(commits.len(), 1);
+
+    // Verify linked issues were extracted and stripped (sorted by owner, repo, number)
+    assert_eq!(commits[0].linked_issues.len(), 3);
+    // Issues without owner/repo come first, sorted by number
+    assert_eq!(commits[0].linked_issues[0].number, 42);
+    assert_eq!(commits[0].linked_issues[0].owner, None);
+    assert_eq!(commits[0].linked_issues[1].number, 256);
+    assert_eq!(commits[0].linked_issues[1].owner, None);
+    // Then issues with owner/repo
+    assert_eq!(commits[0].linked_issues[2].number, 108);
+    assert_eq!(commits[0].linked_issues[2].owner.as_deref(), Some("owner"));
+    assert_eq!(commits[0].linked_issues[2].repo.as_deref(), Some("repo"));
+
+    // Verify excessive blank lines were normalized (4 newlines → 2)
+    assert_eq!(
+        commits[0].body.as_deref(),
+        Some(
+            r#"We'll have a play extempore. The play's the thing wherein I'll catch
+the conscience of the king.
+
+This mechanism allows for the revelation of truth through theatrical
+performance, mirroring reality back to the audience."#
+        )
+    );
+
+    // Verify trailers were detected
+    assert_eq!(commits[0].trailers.len(), 2);
+    match &commits[0].trailers[0] {
+        GitTrailer::SignedOffBy { name, email } => {
+            assert_eq!(name, "William Shakespeare");
+            assert_eq!(email.as_deref(), Some("will@globe-theatre.com"));
+        }
+        _ => panic!("Expected SignedOffBy trailer"),
+    }
+    match &commits[0].trailers[1] {
+        GitTrailer::CoAuthoredBy { name, email } => {
+            assert_eq!(name, "Christopher Marlowe");
+            assert_eq!(email.as_deref(), Some("kit@rose-theatre.com"));
+        }
+        _ => panic!("Expected CoAuthoredBy trailer"),
+    }
+
+    Ok(())
+}

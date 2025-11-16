@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+assertion_line: 172
+expression: result
+---
+## New Features
+- e313b4f0ab857239e313b4f0ab857239e313b4f0 feat: add theatrical script formatting
+
+  The script format preserves the playwright's original line formatting without
+  alteration:
+
+  ```
+  HAMLET: To be, or not to be, that is the question—whether 'tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles
+  OPHELIA: Good my lord, how does your honour for this many a day?
+  ```
+
+  These lines must maintain their integrity as written by the immortal bard.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

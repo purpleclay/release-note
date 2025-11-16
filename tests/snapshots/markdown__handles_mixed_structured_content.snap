@@ -1,0 +1,41 @@
+---
+source: tests/markdown.rs
+assertion_line: 274
+expression: result
+---
+## New Features
+- 02b437dcc3be9b7b02b437dcc3be9b7b02b437dc feat: comprehensive guide to staging Hamlet
+
+  This production combines the traditional elements of Elizabethan theatre with
+  modern interpretations:
+
+  Principal considerations:
+  - The soliloquies must be delivered with proper contemplation and pause for
+    dramatic effect
+  - Staging of the ghost requires atmospheric lighting and ethereal movement
+    across the stage
+  - Sword choreography in the final duel demands precision and theatrical flourish
+
+  Performance notes:
+
+  1. Hamlet's madness should transition from feigned to genuine throughout the
+     five acts
+  2. Ophelia's descent into madness must contrast with Hamlet's calculated
+     performance
+  3. The play-within-a-play scene requires careful direction to maintain audience
+     attention
+
+  Stage directions example:
+
+  ```
+  [Ghost beckons HAMLET to follow. Exeunt GHOST and HAMLET]
+  HORATIO: He waxes desperate with imagination.
+  ```
+
+  > Note: The text of the First Folio differs significantly from the Second Quarto
+  > and should be consulted for alternate readings.
+
+  Additional context on Elizabethan staging conventions is essential for authentic
+  production.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

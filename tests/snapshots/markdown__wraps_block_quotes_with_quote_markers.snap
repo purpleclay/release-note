@@ -1,0 +1,17 @@
+---
+source: tests/markdown.rs
+assertion_line: 195
+expression: result
+---
+## New Features
+- 1802980fdd17481c1802980fdd17481c1802980f feat: add wisdom from the bard
+
+  From the great playwright's most celebrated work on the nature of existence:
+
+  > To be, or not to be, that is the question—whether 'tis nobler in the mind to
+  > suffer the slings and arrows of outrageous fortune, or to take arms against a
+  > sea of troubles and by opposing end them.
+
+  This soliloquy explores the fundamental nature of human existence and mortality.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

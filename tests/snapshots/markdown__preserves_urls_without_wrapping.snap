@@ -1,0 +1,14 @@
+---
+source: tests/markdown.rs
+assertion_line: 233
+expression: result
+---
+## New Features
+- 65445a2ff4f66f5e65445a2ff4f66f5e65445a2f feat: add references to theatrical works
+
+  For the complete text of Hamlet's soliloquy, see [the full soliloquy](https://www.shakespeare.example/hamlet/act-3/scene-1/soliloquy-to-be-or-not-to-be-that-is-the-question)
+  which contains detailed analysis. Additional commentary available at
+  https://www.globe-theatre.example/analysis/existential-questions-in-elizabethan-drama
+  in our reference library.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

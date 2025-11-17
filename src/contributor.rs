@@ -26,12 +26,26 @@ impl ContributorResolver {
     }
 
     pub fn resolve_contributors(&mut self, commits: &mut [Commit]) {
+        use crate::git::GitTrailer;
+
         for commit in commits {
             if let Some(username) = self
                 .platform_resolver
                 .resolve_username(&commit.hash, &commit.email)
             {
-                commit.contributor = Some(username);
+                commit.contributors.push(username);
+            }
+
+            for trailer in &commit.trailers {
+                if let GitTrailer::CoAuthoredBy { name: _, email } = trailer
+                    && let Some(email_addr) = email
+                    && let Some(username) = self
+                        .platform_resolver
+                        .resolve_username(&commit.hash, email_addr)
+                    && !commit.contributors.contains(&username)
+                {
+                    commit.contributors.push(username);
+                }
             }
         }
     }

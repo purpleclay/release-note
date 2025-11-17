@@ -5,10 +5,14 @@ use regex::Regex;
 use std::collections::HashMap;
 use tera::Value;
 
-pub const TEMPLATE: &str = r#"{%- if breaking %}
+pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
+{%- if commit.contributors %} ({{ commit.contributors | mention | join(sep=", ") }}){% endif -%}
+{%- endmacro contributors -%}
+
+{%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
+- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -19,7 +23,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
+- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -30,7 +34,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
+- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -41,7 +45,7 @@ pub const TEMPLATE: &str = r#"{%- if breaking %}
 {%- if dependencies %}
 ## Dependency Updates
 {%- for commit in dependencies %}
-- {{ commit.hash }} {{ commit.first_line }}{% if commit.contributor %} (@{{ commit.contributor }}){% endif %}
+- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -162,6 +166,22 @@ fn unwrap_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<
     Ok(Value::String(unwrapped_paragraphs.join("\n\n")))
 }
 
+fn mention_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+    if let Some(arr) = value.as_array() {
+        let mentions: Vec<Value> = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| Value::String(format!("@{}", s))))
+            .collect();
+        Ok(Value::Array(mentions))
+    } else if let Some(s) = value.as_str() {
+        Ok(Value::String(format!("@{}", s)))
+    } else {
+        Err(tera::Error::msg(
+            "mention filter requires a string or array value",
+        ))
+    }
+}
+
 pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
     if categorized.by_category.is_empty() {
         return Ok(String::new());
@@ -172,6 +192,7 @@ pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
         .context("failed to parse template")?;
 
     tera.register_filter("unwrap", unwrap_filter);
+    tera.register_filter("mention", mention_filter);
 
     let mut context = tera::Context::new();
 

@@ -260,3 +260,25 @@ fn excludes_git_trailers() {
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn displays_multiple_contributors() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: we are such stuff as dreams are made on")
+                .with_contributors(vec!["shakespeare", "marlowe", "jonson"])
+                .build(),
+            CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
+                .with_contributor("shakespeare")
+                .build(),
+        ],
+    );
+
+    let categorized = CategorizedCommits { by_category };
+    let result = markdown::render_history(&categorized).unwrap();
+
+    insta::assert_snapshot!(result);
+}

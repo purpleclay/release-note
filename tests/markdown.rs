@@ -49,7 +49,7 @@ fn generates_release_note_from_multiple_categories() {
 }
 
 #[test]
-fn unfills_paragraph_to_desired_width() {
+fn unwraps_paragraphs_to_single_lines() {
     let mut by_category = HashMap::new();
 
     by_category.insert(
@@ -78,26 +78,7 @@ the attribute to awe and majesty.",
 }
 
 #[test]
-fn preserves_hyphenated_words() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: the ill-fated star-crossed lovers")
-            .with_body(
-                "In fair Verona, where we lay our scene, the never-ending blood-feud between two well-respected households breaks into new mutiny. The star-crossed lovers, fortune-favoured in their passion yet ill-fated in their destiny, take their life. Their death-marked love and parents' rage could naught but with their children's end bury their strife.",
-            )
-            .build()],
-    );
-
-    let categorized = CategorizedCommits { by_category };
-    let result = markdown::render_history(&categorized).unwrap();
-
-    insta::assert_snapshot!(result);
-}
-
-#[test]
-fn wraps_list_items_with_hanging_indent() {
+fn unwraps_list_items_to_single_lines() {
     let mut by_category = HashMap::new();
 
     by_category.insert(
@@ -124,7 +105,7 @@ That is the last scene of all, that ends this strange eventful history.",
 }
 
 #[test]
-fn wraps_numbered_lists_with_hanging_indent() {
+fn unwraps_numbered_lists_to_single_lines() {
     let mut by_category = HashMap::new();
 
     by_category.insert(
@@ -173,7 +154,7 @@ These lines must maintain their integrity as written by the immortal bard.",
 }
 
 #[test]
-fn wraps_block_quotes_with_quote_markers() {
+fn preserves_block_quotes_as_is() {
     let mut by_category = HashMap::new();
 
     by_category.insert(
@@ -185,44 +166,6 @@ fn wraps_block_quotes_with_quote_markers() {
 > To be, or not to be, that is the question—whether 'tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles and by opposing end them.
 
 This soliloquy explores the fundamental nature of human existence and mortality.",
-            )
-            .build()],
-    );
-
-    let categorized = CategorizedCommits { by_category };
-    let result = markdown::render_history(&categorized).unwrap();
-
-    insta::assert_snapshot!(result);
-}
-
-#[test]
-fn preserves_inline_code_without_wrapping() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: preserve formatting in dramatic text")
-            .with_body(
-                "When Hamlet ponders mortality, he invokes `toBeOrNotToBeThatIsTheQuestion` near the line boundary. Similarly, the method `whetherTisNoblerInTheMindToSufferTheSlingsAndArrows` tests wrapping. Call `theSeaOfTroubles` for reference.",
-            )
-            .build()],
-    );
-
-    let categorized = CategorizedCommits { by_category };
-    let result = markdown::render_history(&categorized).unwrap();
-
-    insta::assert_snapshot!(result);
-}
-
-#[test]
-fn preserves_urls_without_wrapping() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: add references to theatrical works")
-            .with_body(
-                "For the complete text of Hamlet's soliloquy, see [the full soliloquy](https://www.shakespeare.example/hamlet/act-3/scene-1/soliloquy-to-be-or-not-to-be-that-is-the-question) which contains detailed analysis. Additional commentary available at https://www.globe-theatre.example/analysis/existential-questions-in-elizabethan-drama in our reference library.",
             )
             .build()],
     );
@@ -264,25 +207,6 @@ HORATIO: He waxes desperate with imagination.
 > Note: The text of the First Folio differs significantly from the Second Quarto and should be consulted for alternate readings.
 
 Additional context on Elizabethan staging conventions is essential for authentic production.",
-            )
-            .build()],
-    );
-
-    let categorized = CategorizedCommits { by_category };
-    let result = markdown::render_history(&categorized).unwrap();
-
-    insta::assert_snapshot!(result);
-}
-
-#[test]
-fn correctly_wraps_long_commit_body() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: now is the winter of our discontent")
-            .with_body(
-                "Made glorious summer by this sun of York; and all the clouds that lour'd upon our house in the deep bosom of the ocean buried. Now are our brows bound with victorious wreaths; our bruised arms hung up for monuments; our stern alarums changed to merry meetings, our dreadful marches to delightful measures. Grim-visaged war hath smooth'd his wrinkled front; and now, instead of mounting barded steeds to fright the souls of fearful adversaries, he capers nimbly in a lady's chamber to the lascivious pleasing of a lute.",
             )
             .build()],
     );

@@ -6,19 +6,16 @@ expression: result
 ## Breaking Changes
 - 4cfa67f04adbe4244cfa67f04adbe4244cfa67f0 feat!: the course of true love never did run smooth
 
-  Lord, what fools these mortals be! The lunatic, the lover and the poet are of
-  imagination all compact.
+  Lord, what fools these mortals be! The lunatic, the lover and the poet are of imagination all compact.
 ## New Features
 - 8c8a505c3365cb6c8c8a505c3365cb6c8c8a505c feat: all the world's a stage
 
-  And all the men and women merely players. They have their exits and their
-  entrances; and one man in his time plays many parts.
+  And all the men and women merely players. They have their exits and their entrances; and one man in his time plays many parts.
 - 70204b7eaa8fbf4070204b7eaa8fbf4070204b7e feat: to be or not to be
 ## Bug Fixes
 - fd0ff5c9d7cd4bf9fd0ff5c9d7cd4bf9fd0ff5c9 fix: though she be but little, she is fierce
 
-  Some are born great, some achieve greatness, and some have greatness thrust
-  upon them.
+  Some are born great, some achieve greatness, and some have greatness thrust upon them.
 ## Dependency Updates
 - 92d570bfc9157e1392d570bfc9157e1392d570bf chore(deps): all that glisters is not gold
 - 7c555da727251e1b7c555da727251e1b7c555da7 fix(deps): the better part of valor is discretion

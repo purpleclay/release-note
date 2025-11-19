@@ -89,6 +89,14 @@ impl GitHubResolver {
         )
     }
 
+    fn extract_username_from_noreply(email: &str) -> Option<String> {
+        email
+            .strip_suffix("@users.noreply.github.com")?
+            .split('+')
+            .nth(1)
+            .map(str::to_string)
+    }
+
     fn query_commit_api(&self, commit_hash: &str) -> Option<String> {
         let client = reqwest::blocking::Client::new();
         let url = format!(
@@ -140,7 +148,10 @@ impl PlatformResolver for GitHubResolver {
             return cached.clone();
         }
 
-        let username = self.query_commit_api(commit_hash);
+        // First, try to extract username from GitHub noreply email
+        let username = Self::extract_username_from_noreply(email)
+            .or_else(|| self.query_commit_api(commit_hash));
+
         if username.is_some() {
             log::info!(
                 "resolved username {} for email: {}",
@@ -264,5 +275,35 @@ mod tests {
         .unwrap();
 
         assert_eq!(username, None);
+    }
+
+    #[tokio::test]
+    async fn resolves_username_from_github_noreply_email_without_api_call() {
+        use wiremock::matchers::{method, path_regex};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r".*"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let mut resolver = GitHubResolver::new(&format!(
+            "https://github.com/{}/{}.git",
+            REPO_OWNER, REPO_NAME
+        ))
+        .unwrap();
+        resolver.with_api_url(mock_server.uri());
+
+        let username = tokio::task::spawn_blocking(move || {
+            resolver.resolve_username("127fca5", "12345678+prospero@users.noreply.github.com")
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(username, Some("prospero".to_string()));
     }
 }

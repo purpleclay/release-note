@@ -1,4 +1,5 @@
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
 use crate::git::Commit;
@@ -89,6 +90,29 @@ impl GitHubResolver {
         )
     }
 
+    fn resolve_ai_contributor(email: &str) -> Option<String> {
+        /// Known AI assistant emails and their GitHub handles.
+        ///
+        /// Currently supported:
+        /// - Claude: Uses `noreply@anthropic.com` as documented in Claude Code
+        ///   (See: https://github.com/anthropics/claude-code/issues/1653)
+        ///   Note: As of June 2025, there were issues with this email being claimed
+        ///   by an unrelated GitHub user. Anthropic is aware of this issue.
+        ///   (See: https://github.com/anthropics/claude-code/issues/1655)
+        static AI_CONTRIBUTORS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
+            HashMap::from([
+                // Claude Code uses this email for co-authorship attribution
+                // Format: Co-authored-by: Claude <noreply@anthropic.com>
+                ("noreply@anthropic.com", "claude"),
+            ])
+        });
+
+        AI_CONTRIBUTORS.get(email).map(|username| {
+            log::info!("Resolved AI contributor: {} -> @{}", email, username);
+            username.to_string()
+        })
+    }
+
     fn extract_username_from_noreply(email: &str) -> Option<String> {
         email
             .strip_suffix("@users.noreply.github.com")?
@@ -148,8 +172,8 @@ impl PlatformResolver for GitHubResolver {
             return cached.clone();
         }
 
-        // First, try to extract username from GitHub noreply email
-        let username = Self::extract_username_from_noreply(email)
+        let username = Self::resolve_ai_contributor(email)
+            .or_else(|| Self::extract_username_from_noreply(email))
             .or_else(|| self.query_commit_api(commit_hash));
 
         if username.is_some() {
@@ -305,5 +329,35 @@ mod tests {
         .unwrap();
 
         assert_eq!(username, Some("prospero".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resolves_ai_contributor_without_api_call() {
+        use wiremock::matchers::{method, path_regex};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r".*"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let mut resolver = GitHubResolver::new(&format!(
+            "https://github.com/{}/{}.git",
+            REPO_OWNER, REPO_NAME
+        ))
+        .unwrap();
+        resolver.with_api_url(mock_server.uri());
+
+        let username = tokio::task::spawn_blocking(move || {
+            resolver.resolve_username("f6ab8dd", "noreply@anthropic.com")
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(username, Some("claude".to_string()));
     }
 }

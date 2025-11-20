@@ -9,7 +9,7 @@ static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([a-z-]+)\))?(!)?(?:\s*):(?:\s*).+").unwrap());
 
 static BREAKING_FOOTER: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)^BREAKING[- ]CHANGES?:").unwrap());
+    Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:").unwrap());
 
 struct ConventionalCommit {
     commit_type: String,
@@ -95,9 +95,21 @@ impl CommitAnalyzer {
     }
 
     fn has_breaking_footer(commit: &Commit) -> bool {
-        if let Some(body) = &commit.body {
-            return BREAKING_FOOTER.is_match(body);
+        if let Some(body) = &commit.body
+            && BREAKING_FOOTER.is_match(body)
+        {
+            return true;
         }
+
+        for trailer in &commit.trailers {
+            if let crate::git::GitTrailer::Other { key, .. } = trailer {
+                let normalized = key.to_uppercase().replace('-', " ");
+                if normalized == "BREAKING CHANGE" || normalized == "BREAKING CHANGES" {
+                    return true;
+                }
+            }
+        }
+
         false
     }
 

@@ -58,7 +58,17 @@ fn categorizes_commits() {
 #[test]
 fn categorizes_by_breaking_change_in_footer() {
     let commit = CommitBuilder::new("fix: the course of true love never did run smooth")
-        .with_body("BREAKING CHANGE: but in battalions")
+        .with_body(
+            "When sorrows come, they come not single spies, but in battalions. \
+First, her father slain; next, your son gone; and he most violent author \
+of his own just remove.
+
+The people muddied, thick and unwholesome in their thoughts and whispers \
+for good Polonius' death, and we have done but greenly in hugger-mugger \
+to inter him.
+
+BREAKING CHANGE: but in battalions",
+        )
         .build();
     let result = CommitAnalyzer::analyze(&[commit]);
     let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
@@ -224,4 +234,31 @@ fn supports_flexible_breaking_footer_formats() {
 
     let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
     assert_eq!(breaking.len(), 5);
+}
+
+#[test]
+fn detects_breaking_change_when_parsed_as_trailer() {
+    let commit = CommitBuilder::new("refactor: parting is such sweet sorrow")
+        .with_trailer("BREAKING CHANGE", "shall I compare thee to a summer's day")
+        .with_trailer(
+            "Co-authored-by",
+            "Christopher Marlowe <kit@rose-theatre.com>",
+        )
+        .build();
+
+    let result = CommitAnalyzer::analyze(&[commit]);
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert_eq!(breaking.len(), 1);
+}
+
+#[test]
+fn detects_breaking_change_trailer_with_hyphen() {
+    let commit = CommitBuilder::new("chore: all's well that ends well")
+        .with_trailer("BREAKING-CHANGES", "the evil that men do lives after them")
+        .with_trailer("Signed-off-by", "Ben Jonson <ben@theatre.com>")
+        .build();
+
+    let result = CommitAnalyzer::analyze(&[commit]);
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert_eq!(breaking.len(), 1);
 }

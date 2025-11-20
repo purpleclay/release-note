@@ -23,7 +23,7 @@ pub struct CommitBuilder {
     trailers: Vec<GitTrailer>,
     author: Option<String>,
     email: Option<String>,
-    contributor: Option<String>,
+    contributors: Vec<String>,
 }
 
 impl CommitBuilder {
@@ -35,7 +35,7 @@ impl CommitBuilder {
             trailers: Vec::new(),
             author: None,
             email: None,
-            contributor: None,
+            contributors: Vec::new(),
         }
     }
 
@@ -68,7 +68,12 @@ impl CommitBuilder {
     }
 
     pub fn with_contributor(mut self, contributor: &str) -> Self {
-        self.contributor = Some(contributor.to_string());
+        self.contributors.push(contributor.to_string());
+        self
+    }
+
+    pub fn with_contributors(mut self, contributors: Vec<&str>) -> Self {
+        self.contributors = contributors.iter().map(|s| s.to_string()).collect();
         self
     }
 
@@ -82,7 +87,7 @@ impl CommitBuilder {
             linked_issues: Vec::new(),
             author: self.author.unwrap_or("William Shakespeare".to_string()),
             email: self.email.unwrap_or("will@globe-theatre.com".to_string()),
-            contributor: self.contributor,
+            contributors: self.contributors,
         }
     }
 }

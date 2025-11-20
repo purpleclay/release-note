@@ -113,7 +113,7 @@ pub struct Commit {
     pub linked_issues: Vec<LinkedIssue>,
     pub author: String,
     pub email: String,
-    pub contributor: Option<String>,
+    pub contributors: Vec<String>,
 }
 
 impl Commit {
@@ -140,7 +140,7 @@ impl Commit {
             linked_issues,
             author,
             email,
-            contributor: None,
+            contributors: Vec::new(),
         }
     }
 

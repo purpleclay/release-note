@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## New Features
+- 23819342d23062db23819342d23062db23819342 feat: add comparison of Shakespeare's great tragedies
+
+  This feature adds a comprehensive overview of the four great tragedies, allowing users to compare key elements across these masterworks of Elizabethan drama.
+
+  | Play     | Year | Protagonist | Fatal Flaw       |
+  |----------|------|-------------|------------------|
+  | Hamlet   | 1601 | Hamlet      | Indecision       |
+  | Othello  | 1604 | Othello     | Jealousy         |
+  | King Lear| 1606 | Lear        | Vanity           |
+  | Macbeth  | 1606 | Macbeth     | Ambition         |
+
+  Each tragedy explores the downfall of a noble figure through their own weaknesses, reflecting the Aristotelian concept of hamartia that Shakespeare so masterfully employed.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

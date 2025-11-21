@@ -57,6 +57,15 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 *Generated with [release-note](https://github.com/purpleclay/release-note)*"#;
 
 static NUMBERED_LIST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+\.\s").unwrap());
+static TABLE_SEPARATOR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\|[\s\-:|]+\|$").unwrap());
+
+fn is_table_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    // Standard table format: starts and ends with pipe
+    (trimmed.starts_with('|') && trimmed.ends_with('|')) ||
+    // Table separator line (e.g., |---|---|)
+    TABLE_SEPARATOR.is_match(trimmed)
+}
 
 fn is_structured_content(para: &str) -> bool {
     para.lines().any(|line| {
@@ -69,6 +78,7 @@ fn is_structured_content(para: &str) -> bool {
             || trimmed.starts_with("    ")
             || trimmed.starts_with('\t')
             || NUMBERED_LIST.is_match(trimmed)
+            || is_table_line(line)
     })
 }
 
@@ -81,6 +91,7 @@ fn is_continuation_line(line: &str) -> bool {
         && !trimmed.starts_with("> ")
         && !trimmed.starts_with("```")
         && !NUMBERED_LIST.is_match(trimmed)
+        && !is_table_line(line)
         && !trimmed.is_empty()
 }
 
@@ -92,6 +103,7 @@ fn unwrap_structured_content(para: &str) -> String {
     for line in para.lines() {
         let trimmed = line.trim_start();
 
+        // Handle code blocks
         if trimmed.starts_with("```") {
             if !current_item.is_empty() {
                 result.push(current_item.join(" "));
@@ -107,6 +119,17 @@ fn unwrap_structured_content(para: &str) -> String {
             continue;
         }
 
+        // Handle tables - preserve each table line as-is
+        if is_table_line(line) {
+            if !current_item.is_empty() {
+                result.push(current_item.join(" "));
+                current_item.clear();
+            }
+            result.push(line.to_string());
+            continue;
+        }
+
+        // Handle lists
         if trimmed.starts_with("- ")
             || trimmed.starts_with("* ")
             || trimmed.starts_with("+ ")
@@ -146,6 +169,14 @@ fn unwrap_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<
         .map(|para| {
             if para.trim().is_empty() {
                 return String::new();
+            }
+
+            // Check if entire paragraph is a table (preserve as-is)
+            if para.lines().all(|line| {
+                let trimmed = line.trim();
+                trimmed.is_empty() || is_table_line(line)
+            }) {
+                return para.to_string();
             }
 
             let lines: Vec<&str> = para.lines().collect();

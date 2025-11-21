@@ -282,3 +282,37 @@ fn displays_multiple_contributors() {
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn preserves_tables_without_unwrapping() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: add comparison of Shakespeare's great tragedies")
+                .with_body(
+                    "This feature adds a comprehensive overview of the four great tragedies, \
+allowing users to compare key elements across these masterworks of \
+Elizabethan drama.
+
+| Play     | Year | Protagonist | Fatal Flaw       |
+|----------|------|-------------|------------------|
+| Hamlet   | 1601 | Hamlet      | Indecision       |
+| Othello  | 1604 | Othello     | Jealousy         |
+| King Lear| 1606 | Lear        | Vanity           |
+| Macbeth  | 1606 | Macbeth     | Ambition         |
+
+Each tragedy explores the downfall of a noble figure through their own \
+weaknesses, reflecting the Aristotelian concept of hamartia that \
+Shakespeare so masterfully employed.",
+                )
+                .build(),
+        ],
+    );
+
+    let categorized = CategorizedCommits { by_category };
+    let result = markdown::render_history(&categorized).unwrap();
+
+    insta::assert_snapshot!(result);
+}

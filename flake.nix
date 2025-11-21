@@ -64,7 +64,7 @@
             claude-co-authored-by-trailer = {
               enable = true;
               name = "claude-co-authored-by-trailer";
-              description = "Add Co-Authored-By: Claude trailer to commits";
+              description = "Add Co-authored-by: Claude trailer to commits";
               entry = let
                 script = pkgs.writeShellScript "claude-co-authored-by-trailer" ''
                   #!/usr/bin/env bash

@@ -43,8 +43,10 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 
 {%- endif %}
 {%- if dependencies %}
+{%- set filtered_deps = dependencies | prefix(exclude="chore") %}
+{%- if filtered_deps %}
 ## Dependency Updates
-{%- for commit in dependencies %}
+{%- for commit in filtered_deps %}
 - {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
@@ -52,6 +54,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- endif %}
 {%- endfor %}
 
+{%- endif %}
 {%- endif %}
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*"#;
@@ -61,10 +64,7 @@ static TABLE_SEPARATOR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\|[\s\-:|]+\|$"
 
 fn is_table_line(line: &str) -> bool {
     let trimmed = line.trim();
-    // Standard table format: starts and ends with pipe
-    (trimmed.starts_with('|') && trimmed.ends_with('|')) ||
-    // Table separator line (e.g., |---|---|)
-    TABLE_SEPARATOR.is_match(trimmed)
+    (trimmed.starts_with('|') && trimmed.ends_with('|')) || TABLE_SEPARATOR.is_match(trimmed)
 }
 
 fn is_structured_content(para: &str) -> bool {
@@ -119,7 +119,6 @@ fn unwrap_structured_content(para: &str) -> String {
             continue;
         }
 
-        // Handle tables - preserve each table line as-is
         if is_table_line(line) {
             if !current_item.is_empty() {
                 result.push(current_item.join(" "));
@@ -129,7 +128,6 @@ fn unwrap_structured_content(para: &str) -> String {
             continue;
         }
 
-        // Handle lists
         if trimmed.starts_with("- ")
             || trimmed.starts_with("* ")
             || trimmed.starts_with("+ ")
@@ -171,7 +169,6 @@ fn unwrap_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<
                 return String::new();
             }
 
-            // Check if entire paragraph is a table (preserve as-is)
             if para.lines().all(|line| {
                 let trimmed = line.trim();
                 trimmed.is_empty() || is_table_line(line)
@@ -213,6 +210,47 @@ fn mention_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result
     }
 }
 
+fn get_string_array(value: &Value) -> Vec<String> {
+    match value {
+        Value::Array(arr) => arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+        Value::String(s) => vec![s.clone()],
+        _ => vec![],
+    }
+}
+
+fn prefix_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
+    let arr = value
+        .as_array()
+        .ok_or_else(|| tera::Error::msg("prefix filter requires an array"))?;
+
+    let include = args
+        .get("include")
+        .map(get_string_array)
+        .unwrap_or_default();
+    let exclude = args
+        .get("exclude")
+        .map(get_string_array)
+        .unwrap_or_default();
+
+    let filtered: Vec<Value> = arr
+        .iter()
+        .filter(|item| {
+            let first_line = item.get("first_line").and_then(Value::as_str).unwrap_or("");
+
+            let included = include.is_empty() || include.iter().any(|p| first_line.starts_with(p));
+            let excluded = exclude.iter().any(|p| first_line.starts_with(p));
+
+            included && !excluded
+        })
+        .cloned()
+        .collect();
+
+    Ok(Value::Array(filtered))
+}
+
 pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
     if categorized.by_category.is_empty() {
         return Ok(String::new());
@@ -224,6 +262,7 @@ pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
 
     tera.register_filter("unwrap", unwrap_filter);
     tera.register_filter("mention", mention_filter);
+    tera.register_filter("prefix", prefix_filter);
 
     let mut context = tera::Context::new();
 

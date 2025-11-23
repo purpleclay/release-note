@@ -1,6 +1,5 @@
 ---
 source: tests/markdown.rs
-assertion_line: 48
 expression: result
 ---
 ## Breaking Changes
@@ -17,7 +16,6 @@ expression: result
 
   Some are born great, some achieve greatness, and some have greatness thrust upon them.
 ## Dependency Updates
-- 92d570bfc9157e1392d570bfc9157e1392d570bf chore(deps): all that glisters is not gold
 - 7c555da727251e1b7c555da727251e1b7c555da7 fix(deps): the better part of valor is discretion
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*

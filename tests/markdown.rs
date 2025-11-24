@@ -11,9 +11,14 @@ fn generates_release_note_from_multiple_categories() {
 
     by_category.insert(
         CommitCategory::Breaking,
-        vec![CommitBuilder::new("feat!: the course of true love never did run smooth")
-            .with_body("Lord, what fools these mortals be! The lunatic, the lover and the poet are of imagination all compact.")
-            .build()],
+        vec![
+            CommitBuilder::new("feat!: the course of true love never did run smooth")
+                .with_body("Lord, what fools these mortals be! The lunatic, the lover and the poet are of imagination all compact.")
+                .build(),
+            CommitBuilder::new("refactor(york)!: now is the winter of our discontent")
+                .with_body("BREAKING CHANGE: made glorious summer by this sun of York.")
+                .build(),
+        ],
     );
 
     by_category.insert(

@@ -12,7 +12,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -23,7 +23,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -34,7 +34,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -47,7 +47,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if filtered_deps %}
 ## Dependency Updates
 {%- for commit in filtered_deps %}
-- {{ commit.hash }} {{ commit.first_line }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -251,6 +251,21 @@ fn prefix_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<V
     Ok(Value::Array(filtered))
 }
 
+fn strip_conventional_prefix_filter(
+    value: &Value,
+    _args: &HashMap<String, Value>,
+) -> tera::Result<Value> {
+    static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"(?i)^[a-z]+(?:\([a-z-]+\))?!?\s*:\s*").unwrap());
+
+    let text = value.as_str().ok_or_else(|| {
+        tera::Error::msg("strip_conventional_prefix filter requires a string value")
+    })?;
+
+    let stripped = CONVENTIONAL_COMMIT_PREFIX.replace(text, "").to_string();
+    Ok(Value::String(stripped))
+}
+
 pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
     if categorized.by_category.is_empty() {
         return Ok(String::new());
@@ -263,6 +278,10 @@ pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
     tera.register_filter("unwrap", unwrap_filter);
     tera.register_filter("mention", mention_filter);
     tera.register_filter("prefix", prefix_filter);
+    tera.register_filter(
+        "strip_conventional_prefix",
+        strip_conventional_prefix_filter,
+    );
 
     let mut context = tera::Context::new();
 

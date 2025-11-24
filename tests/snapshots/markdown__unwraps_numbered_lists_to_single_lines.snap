@@ -1,10 +1,9 @@
 ---
 source: tests/markdown.rs
-assertion_line: 146
 expression: result
 ---
 ## New Features
-- eb409319eb0ce5d0eb409319eb0ce5d0eb409319 feat: instructions for wooing fair maidens
+- eb409319eb0ce5d0eb409319eb0ce5d0eb409319 instructions for wooing fair maidens
 
   When wooing a lady of quality, attend to these principles with utmost care and devotion:
 

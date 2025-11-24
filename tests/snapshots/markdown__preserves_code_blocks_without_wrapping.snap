@@ -1,10 +1,9 @@
 ---
 source: tests/markdown.rs
-assertion_line: 172
 expression: result
 ---
 ## New Features
-- e313b4f0ab857239e313b4f0ab857239e313b4f0 feat: add theatrical script formatting
+- e313b4f0ab857239e313b4f0ab857239e313b4f0 add theatrical script formatting
 
   The script format preserves the playwright's original line formatting without alteration:
 

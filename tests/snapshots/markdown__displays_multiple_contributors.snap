@@ -3,7 +3,7 @@ source: tests/markdown.rs
 expression: result
 ---
 ## New Features
-- f7195de64b75eee5f7195de64b75eee5f7195de6 feat: we are such stuff as dreams are made on (@shakespeare, @marlowe, @jonson)
-- c82cb9580ca797b8c82cb9580ca797b8c82cb958 feat: some Cupid kills with arrows, some with traps (@shakespeare)
+- f7195de64b75eee5f7195de64b75eee5f7195de6 we are such stuff as dreams are made on (@shakespeare, @marlowe, @jonson)
+- c82cb9580ca797b8c82cb9580ca797b8c82cb958 some Cupid kills with arrows, some with traps (@shakespeare)
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*

@@ -3,7 +3,7 @@ source: tests/markdown.rs
 expression: result
 ---
 ## New Features
-- 23819342d23062db23819342d23062db23819342 feat: add comparison of Shakespeare's great tragedies
+- 23819342d23062db23819342d23062db23819342 add comparison of Shakespeare's great tragedies
 
   This feature adds a comprehensive overview of the four great tragedies, allowing users to compare key elements across these masterworks of Elizabethan drama.
 

@@ -1,10 +1,9 @@
 ---
 source: tests/markdown.rs
-assertion_line: 123
 expression: result
 ---
 ## New Features
-- d662116382ce8f69d662116382ce8f69d6621163 feat: the seven ages of man
+- d662116382ce8f69d662116382ce8f69d6621163 the seven ages of man
 
   All the world's a stage, and all the men and women merely players. They have their exits and their entrances; and one man in his time plays many parts, his acts being seven ages:
 

@@ -1,10 +1,9 @@
 ---
 source: tests/markdown.rs
-assertion_line: 77
 expression: result
 ---
 ## New Features
-- 9d41608a39c39a549d41608a39c39a549d41608a feat: add the quality of mercy soliloquy
+- 9d41608a39c39a549d41608a39c39a549d41608a add the quality of mercy soliloquy
 
   The quality of mercy is not strained. It droppeth as the gentle rain from heaven upon the place beneath. It is twice blessed: it blesseth him that gives and him that takes.
 

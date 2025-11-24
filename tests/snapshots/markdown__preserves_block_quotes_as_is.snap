@@ -1,10 +1,9 @@
 ---
 source: tests/markdown.rs
-assertion_line: 195
 expression: result
 ---
 ## New Features
-- 1802980fdd17481c1802980fdd17481c1802980f feat: add wisdom from the bard
+- 1802980fdd17481c1802980fdd17481c1802980f add wisdom from the bard
 
   From the great playwright's most celebrated work on the nature of existence:
 

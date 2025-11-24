@@ -1,10 +1,9 @@
 ---
 source: tests/markdown.rs
-assertion_line: 274
 expression: result
 ---
 ## New Features
-- 02b437dcc3be9b7b02b437dcc3be9b7b02b437dc feat: comprehensive guide to staging Hamlet
+- 02b437dcc3be9b7b02b437dcc3be9b7b02b437dc comprehensive guide to staging Hamlet
 
   This production combines the traditional elements of Elizabethan theatre with modern interpretations:
 

@@ -1,11 +1,18 @@
 use anyhow::Result;
 use once_cell::sync::Lazy;
+use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::git::Commit;
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
+pub struct Contributor {
+    pub username: String,
+    pub avatar_url: String,
+}
+
 pub trait PlatformResolver {
-    fn resolve_username(&mut self, commit_hash: &str, email: &str) -> Option<String>;
+    fn resolve(&mut self, commit_hash: &str, email: &str) -> Option<Contributor>;
 }
 
 pub struct ContributorResolver {
@@ -29,22 +36,21 @@ impl ContributorResolver {
         use crate::git::GitTrailer;
 
         for commit in commits {
-            if let Some(username) = self
-                .platform_resolver
-                .resolve_username(&commit.hash, &commit.email)
-            {
-                commit.contributors.push(username);
+            if let Some(contributor) = self.platform_resolver.resolve(&commit.hash, &commit.email) {
+                commit.contributors.push(contributor);
             }
 
             for trailer in &commit.trailers {
                 if let GitTrailer::CoAuthoredBy { name: _, email } = trailer
                     && let Some(email_addr) = email
-                    && let Some(username) = self
-                        .platform_resolver
-                        .resolve_username(&commit.hash, email_addr)
-                    && !commit.contributors.contains(&username)
+                    && let Some(contributor) =
+                        self.platform_resolver.resolve(&commit.hash, email_addr)
+                    && !commit
+                        .contributors
+                        .iter()
+                        .any(|c| c.username == contributor.username)
                 {
-                    commit.contributors.push(username);
+                    commit.contributors.push(contributor);
                 }
             }
         }
@@ -52,7 +58,7 @@ impl ContributorResolver {
 }
 
 pub struct GitHubResolver {
-    cache: HashMap<String, Option<String>>,
+    cache: HashMap<String, Option<Contributor>>,
     github_token: Option<String>,
     repo_owner: String,
     repo_name: String,
@@ -135,6 +141,45 @@ impl GitHubResolver {
             .map(str::to_string)
     }
 
+    fn query_user_api(&self, username: &str) -> Option<String> {
+        let client = reqwest::blocking::Client::new();
+        // TODO: do we need to URL encode the username?
+        let url = format!("{}/users/{}", self.api_url, username);
+
+        let mut request = client
+            .get(&url)
+            .header(
+                "User-Agent",
+                format!("release-note/{}", env!("CARGO_PKG_VERSION")),
+            )
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+
+        if let Some(token) = &self.github_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        match request.send() {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    if let Ok(json) = resp.json::<serde_json::Value>()
+                        && let Some(avatar_url) =
+                            json.pointer("/avatar_url").and_then(|v| v.as_str())
+                    {
+                        return Some(avatar_url.to_string());
+                    }
+                } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
+                    log::debug!("user {} not found on GitHub", username);
+                }
+                None
+            }
+            Err(e) => {
+                log::warn!("failed to query GitHub user API: {}", e);
+                None
+            }
+        }
+    }
+
     fn query_commit_api(&self, commit_hash: &str) -> Option<String> {
         let client = reqwest::blocking::Client::new();
         let url = format!(
@@ -181,7 +226,7 @@ impl GitHubResolver {
 }
 
 impl PlatformResolver for GitHubResolver {
-    fn resolve_username(&mut self, commit_hash: &str, email: &str) -> Option<String> {
+    fn resolve(&mut self, commit_hash: &str, email: &str) -> Option<Contributor> {
         if let Some(cached) = self.cache.get(email) {
             return cached.clone();
         }
@@ -190,15 +235,19 @@ impl PlatformResolver for GitHubResolver {
             .or_else(|| Self::extract_username_from_noreply(email))
             .or_else(|| self.query_commit_api(commit_hash));
 
-        if username.is_some() {
-            log::info!(
-                "resolved username {} for email: {}",
-                username.as_ref().unwrap(),
-                email
-            );
-            self.cache.insert(email.to_string(), username.clone());
-        }
-        username
+        let contributor = username.map(|username| {
+            let avatar_url = self.query_user_api(&username).unwrap_or_default();
+
+            log::info!("resolved contributor {} for email: {}", username, email);
+
+            Contributor {
+                username,
+                avatar_url,
+            }
+        });
+
+        self.cache.insert(email.to_string(), contributor.clone());
+        contributor
     }
 }
 
@@ -208,6 +257,7 @@ mod tests {
 
     const REPO_OWNER: &str = "shakespeare";
     const REPO_NAME: &str = "globe-theatre";
+    const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/2651292?v=4";
 
     #[tokio::test]
     async fn resolves_github_username_using_commit_api() {
@@ -229,23 +279,37 @@ mod tests {
             .mount(&mock_server)
             .await;
 
+        Mock::given(method("GET"))
+            .and(path("/users/hamlet"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "avatar_url": AVATAR_URL
+            })))
+            .mount(&mock_server)
+            .await;
+
         let mut resolver =
             GitHubResolver::new(&format!("git@github.com:{}/{}.git", REPO_OWNER, REPO_NAME))
                 .unwrap();
         resolver.with_api_url(mock_server.uri());
 
-        let username = tokio::task::spawn_blocking(move || {
-            resolver.resolve_username("599e13c", "hamlet@globe-theatre.com")
+        let contributor = tokio::task::spawn_blocking(move || {
+            resolver.resolve("599e13c", "hamlet@globe-theatre.com")
         })
         .await
         .unwrap();
 
-        assert_eq!(username, Some("hamlet".to_string()));
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "hamlet".to_string(),
+                avatar_url: AVATAR_URL.to_string(),
+            })
+        );
     }
 
     #[tokio::test]
     async fn only_resolves_a_github_username_once() {
-        use wiremock::matchers::{method, path_regex};
+        use wiremock::matchers::{method, path, path_regex};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
@@ -264,6 +328,15 @@ mod tests {
             .mount(&mock_server)
             .await;
 
+        Mock::given(method("GET"))
+            .and(path("/users/ophelia"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "avatar_url": AVATAR_URL
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
         let mut resolver = GitHubResolver::new(&format!(
             "https://github.com/{}/{}.git",
             REPO_OWNER, REPO_NAME
@@ -271,16 +344,20 @@ mod tests {
         .unwrap();
         resolver.with_api_url(mock_server.uri());
 
-        let (username1, username2) = tokio::task::spawn_blocking(move || {
-            let username1 = resolver.resolve_username("3a1d4ed", "ophelia@globe-theatre.com");
-            let username2 = resolver.resolve_username("cbd3d5a", "ophelia@globe-theatre.com");
-            (username1, username2)
+        let (contributor1, contributor2) = tokio::task::spawn_blocking(move || {
+            let contributor1 = resolver.resolve("3a1d4ed", "ophelia@globe-theatre.com");
+            let contributor2 = resolver.resolve("cbd3d5a", "ophelia@globe-theatre.com");
+            (contributor1, contributor2)
         })
         .await
         .unwrap();
 
-        assert_eq!(username1, Some("ophelia".to_string()));
-        assert_eq!(username2, Some("ophelia".to_string()));
+        let expected = Some(Contributor {
+            username: "ophelia".to_string(),
+            avatar_url: AVATAR_URL.to_string(),
+        });
+        assert_eq!(contributor1, expected);
+        assert_eq!(contributor2, expected);
     }
 
     #[tokio::test]
@@ -306,26 +383,36 @@ mod tests {
         .unwrap();
         resolver.with_api_url(mock_server.uri());
 
-        let username = tokio::task::spawn_blocking(move || {
-            resolver.resolve_username("da49181", "test@example.com")
-        })
-        .await
-        .unwrap();
+        let username =
+            tokio::task::spawn_blocking(move || resolver.resolve("da49181", "test@example.com"))
+                .await
+                .unwrap();
 
         assert_eq!(username, None);
     }
 
     #[tokio::test]
-    async fn resolves_username_from_github_noreply_email_without_api_call() {
-        use wiremock::matchers::{method, path_regex};
+    async fn resolves_username_from_github_noreply_email_without_commit_api_call() {
+        use wiremock::matchers::{method, path, path_regex};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
-            .and(path_regex(r".*"))
+            .and(path_regex(format!(
+                r"^/repos/{}/{}/commits/",
+                REPO_OWNER, REPO_NAME
+            )))
             .respond_with(ResponseTemplate::new(200))
             .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/users/prospero"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "avatar_url": AVATAR_URL
+            })))
             .mount(&mock_server)
             .await;
 
@@ -336,26 +423,43 @@ mod tests {
         .unwrap();
         resolver.with_api_url(mock_server.uri());
 
-        let username = tokio::task::spawn_blocking(move || {
-            resolver.resolve_username("127fca5", "12345678+prospero@users.noreply.github.com")
+        let contributor = tokio::task::spawn_blocking(move || {
+            resolver.resolve("127fca5", "12345678+prospero@users.noreply.github.com")
         })
         .await
         .unwrap();
 
-        assert_eq!(username, Some("prospero".to_string()));
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "prospero".to_string(),
+                avatar_url: AVATAR_URL.to_string(),
+            })
+        );
     }
 
     #[tokio::test]
-    async fn resolves_ai_contributor_without_api_call() {
-        use wiremock::matchers::{method, path_regex};
+    async fn resolves_ai_contributor_without_commit_api_call() {
+        use wiremock::matchers::{method, path, path_regex};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
-            .and(path_regex(r".*"))
+            .and(path_regex(format!(
+                r"^/repos/{}/{}/commits/",
+                REPO_OWNER, REPO_NAME
+            )))
             .respond_with(ResponseTemplate::new(200))
             .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/users/claude"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "avatar_url": AVATAR_URL
+            })))
             .mount(&mock_server)
             .await;
 
@@ -366,12 +470,18 @@ mod tests {
         .unwrap();
         resolver.with_api_url(mock_server.uri());
 
-        let username = tokio::task::spawn_blocking(move || {
-            resolver.resolve_username("f6ab8dd", "noreply@anthropic.com")
+        let contributor = tokio::task::spawn_blocking(move || {
+            resolver.resolve("f6ab8dd", "noreply@anthropic.com")
         })
         .await
         .unwrap();
 
-        assert_eq!(username, Some("claude".to_string()));
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "claude".to_string(),
+                avatar_url: AVATAR_URL.to_string(),
+            })
+        );
     }
 }

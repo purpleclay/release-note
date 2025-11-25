@@ -1,7 +1,7 @@
 mod commit;
 
 use commit::CommitBuilder;
-use release_note::analyzer::{CategorizedCommits, CommitCategory};
+use release_note::analyzer::{CategorizedCommits, CommitCategory, ContributorSummary};
 use release_note::markdown;
 use std::collections::HashMap;
 
@@ -47,7 +47,10 @@ fn generates_release_note_from_multiple_categories() {
         ],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -76,7 +79,10 @@ the attribute to awe and majesty.",
         ],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -103,7 +109,10 @@ That is the last scene of all, that ends this strange eventful history.",
             .build()],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -126,7 +135,10 @@ fn unwraps_numbered_lists_to_single_lines() {
             .build()],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -152,7 +164,10 @@ These lines must maintain their integrity as written by the immortal bard.",
             .build()],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -175,7 +190,10 @@ This soliloquy explores the fundamental nature of human existence and mortality.
             .build()],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -216,7 +234,10 @@ Additional context on Elizabethan staging conventions is essential for authentic
             .build()],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -225,7 +246,10 @@ Additional context on Elizabethan staging conventions is essential for authentic
 #[test]
 fn generates_no_release_note_when_no_commits() {
     let by_category = HashMap::new();
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -260,7 +284,10 @@ fn excludes_git_trailers() {
         ],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -282,7 +309,28 @@ fn displays_multiple_contributors() {
         ],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let contributors = vec![
+        ContributorSummary {
+            username: "shakespeare".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 2,
+        },
+        ContributorSummary {
+            username: "jonson".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 1,
+        },
+        ContributorSummary {
+            username: "marlowe".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 1,
+        },
+    ];
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors,
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);
@@ -316,7 +364,10 @@ Shakespeare so masterfully employed.",
         ],
     );
 
-    let categorized = CategorizedCommits { by_category };
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
     let result = markdown::render_history(&categorized).unwrap();
 
     insta::assert_snapshot!(result);

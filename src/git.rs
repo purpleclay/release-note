@@ -8,6 +8,8 @@ use regex::Regex;
 use semver::Version;
 use serde::Serialize;
 
+use crate::contributor::Contributor;
+
 static GIT_TRAILER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([A-Za-z][\w-]*)\s*:\s*(.+)$").unwrap());
 
@@ -113,7 +115,7 @@ pub struct Commit {
     pub linked_issues: Vec<LinkedIssue>,
     pub author: String,
     pub email: String,
-    pub contributors: Vec<String>,
+    pub contributors: Vec<Contributor>,
 }
 
 impl Commit {

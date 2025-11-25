@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use release_note::contributor::Contributor;
 use release_note::git::{Commit, GitTrailer};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -23,7 +24,7 @@ pub struct CommitBuilder {
     trailers: Vec<GitTrailer>,
     author: Option<String>,
     email: Option<String>,
-    contributors: Vec<String>,
+    contributors: Vec<Contributor>,
 }
 
 impl CommitBuilder {
@@ -67,13 +68,22 @@ impl CommitBuilder {
         self
     }
 
-    pub fn with_contributor(mut self, contributor: &str) -> Self {
-        self.contributors.push(contributor.to_string());
+    pub fn with_contributor(mut self, username: &str) -> Self {
+        self.contributors.push(Contributor {
+            username: username.to_string(),
+            avatar_url: format!("https://github.com/{}.png", username),
+        });
         self
     }
 
-    pub fn with_contributors(mut self, contributors: Vec<&str>) -> Self {
-        self.contributors = contributors.iter().map(|s| s.to_string()).collect();
+    pub fn with_contributors(mut self, usernames: Vec<&str>) -> Self {
+        self.contributors = usernames
+            .iter()
+            .map(|s| Contributor {
+                username: s.to_string(),
+                avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            })
+            .collect();
         self
     }
 

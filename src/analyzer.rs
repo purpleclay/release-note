@@ -35,6 +35,14 @@ pub enum CommitCategory {
 #[derive(Debug, Clone, Serialize)]
 pub struct CategorizedCommits {
     pub by_category: HashMap<CommitCategory, Vec<Commit>>,
+    pub contributors: Vec<ContributorSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ContributorSummary {
+    pub username: String,
+    pub avatar_url: String,
+    pub count: usize,
 }
 
 pub struct CommitAnalyzer;
@@ -61,7 +69,12 @@ impl CommitAnalyzer {
             );
         }
 
-        CategorizedCommits { by_category }
+        let contributors = Self::aggregate_contributors(commits);
+
+        CategorizedCommits {
+            by_category,
+            contributors,
+        }
     }
 
     fn categorize(commit: &Commit) -> CommitCategory {
@@ -127,5 +140,31 @@ impl CommitAnalyzer {
         } else {
             None
         }
+    }
+
+    fn aggregate_contributors(commits: &[Commit]) -> Vec<ContributorSummary> {
+        let mut contributor_map: HashMap<String, ContributorSummary> = HashMap::new();
+
+        for commit in commits {
+            for contributor in &commit.contributors {
+                contributor_map
+                    .entry(contributor.username.clone())
+                    .and_modify(|summary| summary.count += 1)
+                    .or_insert_with(|| ContributorSummary {
+                        username: contributor.username.clone(),
+                        avatar_url: contributor.avatar_url.clone(),
+                        count: 1,
+                    });
+            }
+        }
+
+        let mut contributors: Vec<_> = contributor_map.into_values().collect();
+        contributors.sort_by(|a, b| {
+            b.count
+                .cmp(&a.count)
+                .then_with(|| a.username.cmp(&b.username))
+        });
+
+        contributors
     }
 }

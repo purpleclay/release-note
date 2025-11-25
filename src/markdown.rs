@@ -5,14 +5,20 @@ use regex::Regex;
 use std::collections::HashMap;
 use tera::Value;
 
-pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
+pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if commit.contributors %} ({{ commit.contributors | mention | join(sep=", ") }}){% endif -%}
-{%- endmacro contributors -%}
+{%- endmacro commit_contributors -%}
 
+{%- if contributors %}
+## Contributors
+{%- for contributor in contributors %}
+- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %})
+{%- endfor %}
+{% endif %}
 {%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -23,7 +29,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -34,7 +40,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -47,7 +53,7 @@ pub const TEMPLATE: &str = r#"{%- macro contributors(commit) -%}
 {%- if filtered_deps %}
 ## Dependency Updates
 {%- for commit in filtered_deps %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::contributors(commit=commit) }}
+- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -103,7 +109,6 @@ fn unwrap_structured_content(para: &str) -> String {
     for line in para.lines() {
         let trimmed = line.trim_start();
 
-        // Handle code blocks
         if trimmed.starts_with("```") {
             if !current_item.is_empty() {
                 result.push(current_item.join(" "));
@@ -198,7 +203,13 @@ fn mention_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result
     if let Some(arr) = value.as_array() {
         let mentions: Vec<Value> = arr
             .iter()
-            .filter_map(|v| v.as_str().map(|s| Value::String(format!("@{}", s))))
+            .filter_map(|v| {
+                if let Some(username) = v.get("username").and_then(|u| u.as_str()) {
+                    Some(Value::String(format!("@{}", username)))
+                } else {
+                    v.as_str().map(|s| Value::String(format!("@{}", s)))
+                }
+            })
             .collect();
         Ok(Value::Array(mentions))
     } else if let Some(s) = value.as_str() {
@@ -284,6 +295,7 @@ pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
     );
 
     let mut context = tera::Context::new();
+    context.insert("contributors", &categorized.contributors);
 
     if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {
         context.insert("breaking", breaking);

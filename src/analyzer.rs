@@ -43,6 +43,7 @@ pub struct ContributorSummary {
     pub username: String,
     pub avatar_url: String,
     pub count: usize,
+    pub is_bot: bool,
 }
 
 pub struct CommitAnalyzer;
@@ -154,6 +155,7 @@ impl CommitAnalyzer {
                         username: contributor.username.clone(),
                         avatar_url: contributor.avatar_url.clone(),
                         count: 1,
+                        is_bot: contributor.is_bot,
                     });
             }
         }

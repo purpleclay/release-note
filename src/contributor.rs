@@ -9,6 +9,7 @@ use crate::git::Commit;
 pub struct Contributor {
     pub username: String,
     pub avatar_url: String,
+    pub is_bot: bool,
 }
 
 pub trait PlatformResolver {
@@ -141,10 +142,9 @@ impl GitHubResolver {
             .map(str::to_string)
     }
 
-    fn query_user_api(&self, username: &str) -> Option<String> {
+    fn query_user_api(&self, username: &str) -> Option<(String, bool)> {
         let client = reqwest::blocking::Client::new();
-        // TODO: do we need to URL encode the username?
-        let url = format!("{}/users/{}", self.api_url, username);
+        let url = format!("{}/users/{}", self.api_url, urlencoding::encode(username));
 
         let mut request = client
             .get(&url)
@@ -166,7 +166,13 @@ impl GitHubResolver {
                         && let Some(avatar_url) =
                             json.pointer("/avatar_url").and_then(|v| v.as_str())
                     {
-                        return Some(avatar_url.to_string());
+                        let is_bot = json
+                            .pointer("/type")
+                            .and_then(|v| v.as_str())
+                            .map(|t| t.eq_ignore_ascii_case("Bot"))
+                            .unwrap_or(false);
+
+                        return Some((avatar_url.to_string(), is_bot));
                     }
                 } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
                     log::debug!("user {} not found on GitHub", username);
@@ -236,13 +242,21 @@ impl PlatformResolver for GitHubResolver {
             .or_else(|| self.query_commit_api(commit_hash));
 
         let contributor = username.map(|username| {
-            let avatar_url = self.query_user_api(&username).unwrap_or_default();
+            let (avatar_url, is_bot) = self
+                .query_user_api(&username)
+                .unwrap_or_else(|| (String::new(), false));
 
-            log::info!("resolved contributor {} for email: {}", username, email);
+            log::info!(
+                "resolved contributor {} for email: {} (bot: {})",
+                username,
+                email,
+                is_bot
+            );
 
             Contributor {
                 username,
                 avatar_url,
+                is_bot,
             }
         });
 
@@ -273,16 +287,20 @@ mod tests {
             )))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "author": {
-                    "login": "hamlet"
+                    "login": "hamlet[bot]"
                 }
             })))
             .mount(&mock_server)
             .await;
 
         Mock::given(method("GET"))
-            .and(path("/users/hamlet"))
+            .and(path(format!(
+                "/users/{}",
+                urlencoding::encode("hamlet[bot]")
+            )))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "avatar_url": AVATAR_URL
+                "avatar_url": AVATAR_URL,
+                "type": "Bot",
             })))
             .mount(&mock_server)
             .await;
@@ -293,7 +311,7 @@ mod tests {
         resolver.with_api_url(mock_server.uri());
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("599e13c", "hamlet@globe-theatre.com")
+            resolver.resolve("599e13c", "hamlet[bot]@globe-theatre.com")
         })
         .await
         .unwrap();
@@ -301,8 +319,9 @@ mod tests {
         assert_eq!(
             contributor,
             Some(Contributor {
-                username: "hamlet".to_string(),
+                username: "hamlet[bot]".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
+                is_bot: true,
             })
         );
     }
@@ -355,6 +374,7 @@ mod tests {
         let expected = Some(Contributor {
             username: "ophelia".to_string(),
             avatar_url: AVATAR_URL.to_string(),
+            is_bot: false,
         });
         assert_eq!(contributor1, expected);
         assert_eq!(contributor2, expected);
@@ -434,6 +454,7 @@ mod tests {
             Some(Contributor {
                 username: "prospero".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
+                is_bot: false,
             })
         );
     }
@@ -481,6 +502,7 @@ mod tests {
             Some(Contributor {
                 username: "claude".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
+                is_bot: false,
             })
         );
     }

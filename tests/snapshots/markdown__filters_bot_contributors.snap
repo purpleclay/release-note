@@ -1,0 +1,12 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## Contributors
+- <img src="https://avatars.githubusercontent.com/u/2651292?v=4&size=20" align="center">&nbsp;&nbsp;@shakespeare (1 commit)
+
+## New Features
+- a86272be496b592fa86272be496b592fa86272be the course of true love never did run smooth (@shakespeare)
+- c74221d569c14276c74221d569c14276c74221d5 a plague o' both your houses (@iago[bot])
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

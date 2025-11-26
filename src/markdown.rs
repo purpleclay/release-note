@@ -11,7 +11,7 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 
 {%- if contributors %}
 ## Contributors
-{%- for contributor in contributors %}
+{%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
 - <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %})
 {%- endfor %}
 {% endif %}

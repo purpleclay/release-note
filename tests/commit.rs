@@ -72,6 +72,16 @@ impl CommitBuilder {
         self.contributors.push(Contributor {
             username: username.to_string(),
             avatar_url: format!("https://github.com/{}.png", username),
+            is_bot: false,
+        });
+        self
+    }
+
+    pub fn with_contributor_bot(mut self, username: &str) -> Self {
+        self.contributors.push(Contributor {
+            username: username.to_string(),
+            avatar_url: format!("https://github.com/{}.png", username),
+            is_bot: true,
         });
         self
     }
@@ -82,6 +92,7 @@ impl CommitBuilder {
             .map(|s| Contributor {
                 username: s.to_string(),
                 avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+                is_bot: false,
             })
             .collect();
         self

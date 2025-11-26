@@ -314,16 +314,59 @@ fn displays_multiple_contributors() {
             username: "shakespeare".to_string(),
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 2,
+            is_bot: false,
         },
         ContributorSummary {
             username: "jonson".to_string(),
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
+            is_bot: false,
         },
         ContributorSummary {
             username: "marlowe".to_string(),
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
+            is_bot: false,
+        },
+    ];
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors,
+    };
+    let result = markdown::render_history(&categorized).unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn filters_bot_contributors() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: the course of true love never did run smooth")
+                .with_contributor("shakespeare")
+                .build(),
+            CommitBuilder::new("feat: a plague o' both your houses")
+                .with_contributor_bot("iago[bot]")
+                .build(),
+        ],
+    );
+
+    let contributors = vec![
+        ContributorSummary {
+            username: "shakespeare".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 1,
+            is_bot: false,
+        },
+        ContributorSummary {
+            username: "iago[bot]".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 1,
+            is_bot: true,
         },
     ];
 

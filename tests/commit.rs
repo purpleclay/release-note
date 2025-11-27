@@ -17,6 +17,8 @@ fn generate_hash(first_line: &str) -> String {
     )
 }
 
+const BASE_TIMESTAMP: i64 = 1564567890;
+
 pub struct CommitBuilder {
     hash: Option<String>,
     first_line: String,
@@ -25,6 +27,7 @@ pub struct CommitBuilder {
     author: Option<String>,
     email: Option<String>,
     contributors: Vec<Contributor>,
+    timestamp: Option<i64>,
 }
 
 impl CommitBuilder {
@@ -37,6 +40,7 @@ impl CommitBuilder {
             author: None,
             email: None,
             contributors: Vec::new(),
+            timestamp: None,
         }
     }
 
@@ -98,6 +102,11 @@ impl CommitBuilder {
         self
     }
 
+    pub fn with_timestamp(mut self, timestamp: i64) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
     pub fn build(self) -> Commit {
         let hash = self.hash.unwrap_or_else(|| generate_hash(&self.first_line));
         Commit {
@@ -109,6 +118,7 @@ impl CommitBuilder {
             author: self.author.unwrap_or("William Shakespeare".to_string()),
             email: self.email.unwrap_or("will@globe-theatre.com".to_string()),
             contributors: self.contributors,
+            timestamp: self.timestamp.unwrap_or(BASE_TIMESTAMP),
         }
     }
 }

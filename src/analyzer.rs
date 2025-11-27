@@ -44,6 +44,8 @@ pub struct ContributorSummary {
     pub avatar_url: String,
     pub count: usize,
     pub is_bot: bool,
+    pub first_commit_timestamp: i64,
+    pub last_commit_timestamp: i64,
 }
 
 pub struct CommitAnalyzer;
@@ -150,12 +152,20 @@ impl CommitAnalyzer {
             for contributor in &commit.contributors {
                 contributor_map
                     .entry(contributor.username.clone())
-                    .and_modify(|summary| summary.count += 1)
+                    .and_modify(|summary| {
+                        summary.count += 1;
+                        summary.first_commit_timestamp =
+                            summary.first_commit_timestamp.min(commit.timestamp);
+                        summary.last_commit_timestamp =
+                            summary.last_commit_timestamp.max(commit.timestamp);
+                    })
                     .or_insert_with(|| ContributorSummary {
                         username: contributor.username.clone(),
                         avatar_url: contributor.avatar_url.clone(),
                         count: 1,
                         is_bot: contributor.is_bot,
+                        first_commit_timestamp: commit.timestamp,
+                        last_commit_timestamp: commit.timestamp,
                     });
             }
         }

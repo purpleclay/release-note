@@ -51,7 +51,67 @@ fn generates_release_note_from_multiple_categories() {
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn displays_contributors_with_github_commit_links() {
+    use release_note::metadata::ProjectMetadata;
+
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: the course of true love never did run smooth")
+                .with_contributor("shakespeare")
+                .with_timestamp(1748390400)
+                .build(),
+            CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
+                .with_contributor("shakespeare")
+                .with_timestamp(1748476800)
+                .build(),
+            CommitBuilder::new("feat: all the world's a stage")
+                .with_contributor("marlowe")
+                .with_timestamp(1748390400)
+                .build(),
+        ],
+    );
+
+    let contributors = vec![
+        ContributorSummary {
+            username: "shakespeare".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 2,
+            is_bot: false,
+            first_commit_timestamp: 1748390400,
+            last_commit_timestamp: 1748476800,
+        },
+        ContributorSummary {
+            username: "marlowe".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 1,
+            is_bot: false,
+            first_commit_timestamp: 1748390400,
+            last_commit_timestamp: 1748390400,
+        },
+    ];
+
+    let project = ProjectMetadata {
+        host: "github.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        url: "https://github.com/shakespeare/globe-theatre".to_string(),
+        git_ref: "v1.0.0".to_string(),
+    };
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors,
+    };
+    let result = markdown::render_history(&categorized, Some(&project)).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -83,7 +143,7 @@ the attribute to awe and majesty.",
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -113,7 +173,7 @@ That is the last scene of all, that ends this strange eventful history.",
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -139,7 +199,7 @@ fn unwraps_numbered_lists_to_single_lines() {
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -168,7 +228,7 @@ These lines must maintain their integrity as written by the immortal bard.",
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -194,7 +254,7 @@ This soliloquy explores the fundamental nature of human existence and mortality.
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -238,7 +298,7 @@ Additional context on Elizabethan staging conventions is essential for authentic
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -250,7 +310,7 @@ fn generates_no_release_note_when_no_commits() {
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -288,7 +348,7 @@ fn excludes_git_trailers() {
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -315,18 +375,24 @@ fn displays_multiple_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 2,
             is_bot: false,
+            first_commit_timestamp: 1564567890,
+            last_commit_timestamp: 1564567891,
         },
         ContributorSummary {
             username: "jonson".to_string(),
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            first_commit_timestamp: 1564567890,
+            last_commit_timestamp: 1564567890,
         },
         ContributorSummary {
             username: "marlowe".to_string(),
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            first_commit_timestamp: 1564567890,
+            last_commit_timestamp: 1564567890,
         },
     ];
 
@@ -334,7 +400,7 @@ fn displays_multiple_contributors() {
         by_category,
         contributors,
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -361,12 +427,16 @@ fn filters_bot_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            first_commit_timestamp: 1564567890,
+            last_commit_timestamp: 1564567890,
         },
         ContributorSummary {
             username: "iago[bot]".to_string(),
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: true,
+            first_commit_timestamp: 1564567890,
+            last_commit_timestamp: 1564567890,
         },
     ];
 
@@ -374,7 +444,7 @@ fn filters_bot_contributors() {
         by_category,
         contributors,
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -411,7 +481,7 @@ Shakespeare so masterfully employed.",
         by_category,
         contributors: Vec::new(),
     };
-    let result = markdown::render_history(&categorized).unwrap();
+    let result = markdown::render_history(&categorized, None).unwrap();
 
     insta::assert_snapshot!(result);
 }

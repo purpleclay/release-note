@@ -116,6 +116,7 @@ pub struct Commit {
     pub author: String,
     pub email: String,
     pub contributors: Vec<Contributor>,
+    pub timestamp: i64,
 }
 
 impl Commit {
@@ -123,6 +124,7 @@ impl Commit {
         let hash = commit.id().to_string();
         let author = commit.author().name().unwrap_or_default().to_string();
         let email = commit.author().email().unwrap_or_default().to_string();
+        let timestamp = commit.time().seconds();
 
         let message = commit.message().unwrap_or_default();
         let lines: Vec<&str> = message.lines().collect();
@@ -143,6 +145,7 @@ impl Commit {
             author,
             email,
             contributors: Vec::new(),
+            timestamp,
         }
     }
 
@@ -259,6 +262,18 @@ impl Commit {
 impl GitRepo {
     pub fn origin_url(&self) -> Option<&str> {
         self.origin_url.as_deref()
+    }
+
+    pub fn current_branch(&self) -> Result<String> {
+        let head = self.repo.head()?;
+
+        if !head.is_branch() {
+            anyhow::bail!("Repository is in detached HEAD state. Please checkout a branch.");
+        }
+
+        head.shorthand()
+            .map(String::from)
+            .ok_or_else(|| anyhow::anyhow!("Failed to determine current branch name"))
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {

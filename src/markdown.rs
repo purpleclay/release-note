@@ -9,10 +9,20 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if commit.contributors %} ({{ commit.contributors | mention | join(sep=", ") }}){% endif -%}
 {%- endmacro commit_contributors -%}
 
+{%- macro contributor_link(contributor, project) -%}
+{%- if project -%}
+{%- set since = contributor.first_commit_timestamp | date(format="%Y-%m-%d") -%}
+{%- set until = contributor.last_commit_timestamp | date(format="%Y-%m-%d") -%}
+[**`{{ contributor.count }}`**]({{ project.url }}/commits/{{ project.git_ref }}?author={{ contributor.username }}&since={{ since }}&until={{ until }}) commit{% if contributor.count != 1 %}s{% endif %}
+{%- else -%}
+{{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %}
+{%- endif -%}
+{%- endmacro contributor_link -%}
+
 {%- if contributors %}
 ## Contributors
 {%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
-- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %})
+- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor, project=project) }})
 {%- endfor %}
 {% endif %}
 {%- if breaking %}
@@ -277,7 +287,10 @@ fn strip_conventional_prefix_filter(
     Ok(Value::String(stripped))
 }
 
-pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
+pub fn render_history(
+    categorized: &CategorizedCommits,
+    project: Option<&crate::metadata::ProjectMetadata>,
+) -> Result<String> {
     if categorized.by_category.is_empty() {
         return Ok(String::new());
     }
@@ -296,6 +309,7 @@ pub fn render_history(categorized: &CategorizedCommits) -> Result<String> {
 
     let mut context = tera::Context::new();
     context.insert("contributors", &categorized.contributors);
+    context.insert("project", &project);
 
     if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {
         context.insert("breaking", breaking);

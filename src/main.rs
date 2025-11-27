@@ -6,6 +6,7 @@ use release_note::analyzer::CommitAnalyzer;
 use release_note::contributor;
 use release_note::git::GitRepo;
 use release_note::markdown;
+use release_note::metadata::ProjectMetadata;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -65,7 +66,7 @@ fn main() -> Result<()> {
     }
 
     let repo = GitRepo::open(&args.path)?;
-    let mut history = repo.history(args.from, args.to)?;
+    let mut history = repo.history(args.from.clone(), args.to.clone())?;
 
     if let Some(url) = repo.origin_url()
         && let Ok(Some(mut resolver)) = contributor::ContributorResolver::from_url(url)
@@ -73,10 +74,22 @@ fn main() -> Result<()> {
         resolver.resolve_contributors(&mut history);
     }
 
+    let project_metadata = repo.origin_url().and_then(|url| {
+        let git_ref = match &args.to {
+            Some(from_ref) => from_ref.clone(),
+            None => repo.current_branch().ok()?,
+        };
+
+        ProjectMetadata::new(url, git_ref).ok()
+    });
+
     let categorized = CommitAnalyzer::analyze(&history);
     log::info!("");
 
-    println!("{}", markdown::render_history(&categorized)?);
+    println!(
+        "{}",
+        markdown::render_history(&categorized, project_metadata.as_ref())?
+    );
     Ok(())
 }
 

@@ -14,7 +14,7 @@ Download a specific version using the `-v` flag. The script uses `sudo` by defau
 
 ```sh
 sh -c "$(curl https://raw.githubusercontent.com/purpleclay/release-note/main/scripts/install.sh)" \
-  -- -v 0.4.0 --no-sudo -d ./bin
+  -- -v 0.7.0 --no-sudo -d ./bin
 ```
 
 ## Run with Nix

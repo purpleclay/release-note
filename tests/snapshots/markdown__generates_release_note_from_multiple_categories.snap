@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`2`**](#breaking-changes) breaking changes • [**`2`**](#new-features) new features • [**`1`**](#bug-fixes) bug fixed
+
 ## Breaking Changes
 - 4cfa67f04adbe4244cfa67f04adbe4244cfa67f0 the course of true love never did run smooth
 

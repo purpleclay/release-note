@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`1`**](#new-features) new feature
+
 ## New Features
 - 1802980fdd17481c1802980fdd17481c1802980f add wisdom from the bard
 

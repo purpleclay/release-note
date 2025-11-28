@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`1`**](#new-features) new feature
+
 ## New Features
 - d662116382ce8f69d662116382ce8f69d6621163 the seven ages of man
 

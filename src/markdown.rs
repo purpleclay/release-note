@@ -19,6 +19,43 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endif -%}
 {%- endmacro contributor_link -%}
 
+## {% if project and project.git_ref %}{{ project.git_ref }} - {% endif %}{{ release_date | date(format="%B %d, %Y") }}
+
+{%- set stats = [] -%}
+{%- if breaking -%}
+  {%- set breaking_count = breaking | length -%}
+  {%- if breaking_count > 0 -%}
+    {%- if breaking_count == 1 -%}
+      {%- set_global stats = stats | concat(with="[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking change") -%}
+    {%- else -%}
+      {%- set_global stats = stats | concat(with="[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking changes") -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if features -%}
+  {%- set features_count = features | length -%}
+  {%- if features_count > 0 -%}
+    {%- if features_count == 1 -%}
+      {%- set_global stats = stats | concat(with="[**`" ~ features_count ~ "`**](#new-features) new feature") -%}
+    {%- else -%}
+      {%- set_global stats = stats | concat(with="[**`" ~ features_count ~ "`**](#new-features) new features") -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if fixes -%}
+  {%- set fixes_count = fixes | length -%}
+  {%- if fixes_count > 0 -%}
+    {%- if fixes_count == 1 -%}
+      {%- set_global stats = stats | concat(with="[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixed") -%}
+    {%- else -%}
+      {%- set_global stats = stats | concat(with="[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixes") -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if stats | length > 0 %}
+
+{{ stats | join(sep=" • ") }}
+{% endif %}
 {%- if contributors %}
 ## Contributors
 {%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
@@ -290,6 +327,7 @@ fn strip_conventional_prefix_filter(
 pub fn render_history(
     categorized: &CategorizedCommits,
     project: Option<&crate::metadata::ProjectMetadata>,
+    release_date: i64,
 ) -> Result<String> {
     if categorized.by_category.is_empty() {
         return Ok(String::new());
@@ -310,6 +348,7 @@ pub fn render_history(
     let mut context = tera::Context::new();
     context.insert("contributors", &categorized.contributors);
     context.insert("project", &project);
+    context.insert("release_date", &release_date);
 
     if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {
         context.insert("breaking", breaking);

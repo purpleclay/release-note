@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`2`**](#new-features) new features • [**`1`**](#bug-fixes) bug fixed
+
 ## New Features
 - 2c834bf8cfb379582c834bf8cfb379582c834bf8 the lady doth protest too much, methinks
 

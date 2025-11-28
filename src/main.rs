@@ -75,20 +75,27 @@ fn main() -> Result<()> {
     }
 
     let project_metadata = repo.origin_url().and_then(|url| {
-        let git_ref = match &args.to {
-            Some(from_ref) => from_ref.clone(),
-            None => repo.current_branch().ok()?,
-        };
-
-        ProjectMetadata::new(url, git_ref).ok()
+        let git_ref = args.from.clone().or_else(|| repo.current_ref().ok())?;
+        match ProjectMetadata::new(url, git_ref) {
+            Ok(metadata) => Some(metadata),
+            Err(e) => {
+                log::info!("failed to parse project metadata: {}", e);
+                None
+            }
+        }
     });
 
     let categorized = CommitAnalyzer::analyze(&history);
     log::info!("");
 
+    let release_date = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
     println!(
         "{}",
-        markdown::render_history(&categorized, project_metadata.as_ref())?
+        markdown::render_history(&categorized, project_metadata.as_ref(), release_date)?
     );
     Ok(())
 }

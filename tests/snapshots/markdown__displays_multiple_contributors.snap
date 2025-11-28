@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`2`**](#new-features) new features
+
 ## Contributors
 - <img src="https://avatars.githubusercontent.com/u/2651292?v=4&size=20" align="center">&nbsp;&nbsp;@shakespeare (2 commits)
 - <img src="https://avatars.githubusercontent.com/u/2651292?v=4&size=20" align="center">&nbsp;&nbsp;@jonson (1 commit)

@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`1`**](#new-features) new feature
+
 ## New Features
 - 9d41608a39c39a549d41608a39c39a549d41608a add the quality of mercy soliloquy
 

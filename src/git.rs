@@ -264,16 +264,23 @@ impl GitRepo {
         self.origin_url.as_deref()
     }
 
-    pub fn current_branch(&self) -> Result<String> {
+    pub fn current_ref(&self) -> Result<String> {
         let head = self.repo.head()?;
+        let head_oid = head.peel_to_commit()?.id();
 
-        if !head.is_branch() {
-            anyhow::bail!("Repository is in detached HEAD state. Please checkout a branch.");
+        if let Ok(tag_names) = self.repo.tag_names(None) {
+            for tag_name in tag_names.iter().flatten() {
+                let tag_ref = format!("refs/tags/{}", tag_name);
+                if let Ok(reference) = self.repo.find_reference(&tag_ref)
+                    && let Ok(commit) = reference.peel_to_commit()
+                    && commit.id() == head_oid
+                {
+                    return Ok(tag_name.to_string());
+                }
+            }
         }
 
-        head.shorthand()
-            .map(String::from)
-            .ok_or_else(|| anyhow::anyhow!("Failed to determine current branch name"))
+        Ok(head_oid.to_string()[..7].to_string())
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {

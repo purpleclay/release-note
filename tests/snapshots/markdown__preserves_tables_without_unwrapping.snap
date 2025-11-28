@@ -2,6 +2,10 @@
 source: tests/markdown.rs
 expression: result
 ---
+## November 27, 2025
+
+[**`1`**](#new-features) new feature
+
 ## New Features
 - 23819342d23062db23819342d23062db23819342 add comparison of Shakespeare's great tragedies
 

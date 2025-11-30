@@ -1,62 +1,6 @@
+use super::{Contributor, PlatformResolver};
 use anyhow::Result;
-use once_cell::sync::Lazy;
-use serde::Serialize;
 use std::collections::HashMap;
-
-use crate::git::Commit;
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
-pub struct Contributor {
-    pub username: String,
-    pub avatar_url: String,
-    pub is_bot: bool,
-}
-
-pub trait PlatformResolver {
-    fn resolve(&mut self, commit_hash: &str, email: &str) -> Option<Contributor>;
-}
-
-pub struct ContributorResolver {
-    platform_resolver: Box<dyn PlatformResolver>,
-}
-
-impl ContributorResolver {
-    pub fn from_url(url: &str) -> Result<Option<Self>> {
-        if url.contains("github.com") {
-            log::info!("project is hosted on GitHub (github.com)");
-            Ok(Some(Self {
-                platform_resolver: Box::new(GitHubResolver::new(url)?),
-            }))
-        } else {
-            log::warn!("unrecognized platform, contributor resolution will be skipped");
-            Ok(None)
-        }
-    }
-
-    pub fn resolve_contributors(&mut self, commits: &mut [Commit]) {
-        use crate::git::GitTrailer;
-
-        for commit in commits {
-            if let Some(contributor) = self.platform_resolver.resolve(&commit.hash, &commit.email) {
-                commit.contributors.push(contributor);
-            }
-
-            for trailer in &commit.trailers {
-                if let GitTrailer::CoAuthoredBy { name: _, email } = trailer
-                    && let Some(email_addr) = email
-                    && let Some(contributor) =
-                        self.platform_resolver.resolve(&commit.hash, email_addr)
-                    && !commit
-                        .contributors
-                        .iter()
-                        .any(|c| c.username == contributor.username)
-                {
-                    commit.contributors.push(contributor);
-                }
-            }
-        }
-    }
-}
 
 pub struct GitHubResolver {
     cache: HashMap<String, Option<Contributor>>,
@@ -81,7 +25,7 @@ impl GitHubResolver {
     }
 
     #[cfg(test)]
-    fn with_api_url(&mut self, api_url: String) {
+    pub fn with_api_url(&mut self, api_url: String) {
         self.api_url = api_url;
     }
 
@@ -109,29 +53,6 @@ impl GitHubResolver {
             "failed to extract project owner and name from GitHub from malformed origin: {}",
             url
         )
-    }
-
-    fn resolve_ai_contributor(email: &str) -> Option<String> {
-        /// Known AI assistant emails and their GitHub handles.
-        ///
-        /// Currently supported:
-        /// - Claude: Uses `noreply@anthropic.com` as documented in Claude Code
-        ///   (See: https://github.com/anthropics/claude-code/issues/1653)
-        ///   Note: As of June 2025, there were issues with this email being claimed
-        ///   by an unrelated GitHub user. Anthropic is aware of this issue.
-        ///   (See: https://github.com/anthropics/claude-code/issues/1655)
-        static AI_CONTRIBUTORS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
-            HashMap::from([
-                // Claude Code uses this email for co-authorship attribution
-                // Format: Co-authored-by: Claude <noreply@anthropic.com>
-                ("noreply@anthropic.com", "claude"),
-            ])
-        });
-
-        AI_CONTRIBUTORS.get(email).map(|username| {
-            log::info!("Resolved AI contributor: {} -> @{}", email, username);
-            username.to_string()
-        })
     }
 
     fn extract_username_from_noreply(email: &str) -> Option<String> {

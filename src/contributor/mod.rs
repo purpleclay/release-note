@@ -47,6 +47,30 @@ pub trait PlatformResolver {
             username.to_string()
         })
     }
+
+    /// Generates a Gravatar URL for the given email address.
+    ///
+    /// This is used as a fallback when avatar URLs cannot be retrieved from
+    /// the platform API (e.g., due to rate limiting, network errors, or authorization failures).
+    ///
+    /// The Gravatar service generates an avatar based on the SHA256 hash of the email.
+    /// The `?d=retro` parameter ensures a geometric pattern is shown if the email
+    /// is not registered with Gravatar.
+    ///
+    /// See: https://docs.gravatar.com/api/avatars/images/
+    fn generate_gravatar_url(email: &str) -> String
+    where
+        Self: Sized,
+    {
+        use sha2::{Digest, Sha256};
+
+        let normalized_email = email.trim().to_lowercase();
+        let mut hasher = Sha256::new();
+        hasher.update(normalized_email.as_bytes());
+        let hash = format!("{:x}", hasher.finalize());
+
+        format!("https://www.gravatar.com/avatar/{}?d=retro", hash)
+    }
 }
 
 pub struct ContributorResolver {

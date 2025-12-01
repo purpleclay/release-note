@@ -267,7 +267,7 @@ impl PlatformResolver for GitLabResolver {
         let contributor = username.map(|username| {
             let (avatar_url, is_bot) = self
                 .query_user_api(&username)
-                .unwrap_or_else(|| (String::new(), false));
+                .unwrap_or_else(|| (Self::generate_gravatar_url(email), false));
 
             log::info!(
                 "resolved contributor {} for email: {} (bot: {})",
@@ -672,6 +672,93 @@ mod tests {
                 username: "puck-bot".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: true,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_gravatar_when_user_details_api_fails() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        let query = r#"
+            query GetCommitAuthor($projectPath: ID!, $ref: String!) {
+                project(fullPath: $projectPath) {
+                    repository {
+                        commit(ref: $ref) {
+                            author {
+                                username
+                            }
+                        }
+                    }
+                }
+            }
+        "#;
+
+        Mock::given(method("POST"))
+            .and(path("/api/graphql"))
+            .and(body_json(serde_json::json!({
+                "query": GitLabResolver::normalize_graphql_query(query),
+                "variables": {
+                    "projectPath": PROJECT_PATH,
+                    "ref": "a1b2c3d"
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "project": {
+                        "repository": {
+                            "commit": {
+                                "author": {
+                                    "username": "hamlet"
+                                }
+                            }
+                        }
+                    }
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": 123,
+                    "username": "hamlet"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/123"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "message": "403 Forbidden - Not authorized!"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let mut resolver =
+            GitLabResolver::new(&format!("https://gitlab.com/{}.git", PROJECT_PATH)).unwrap();
+        resolver.with_api_urls(
+            format!("{}/api/graphql", mock_server.uri()),
+            format!("{}/api/v4", mock_server.uri()),
+        );
+
+        let contributor =
+            tokio::task::spawn_blocking(move || resolver.resolve("a1b2c3d", "hamlet@denmark.dk"))
+                .await
+                .unwrap();
+
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "hamlet".to_string(),
+                avatar_url: "https://www.gravatar.com/avatar/7d6b35201428278c124e8bb39b932896790646965aec6df4b8673f0bc850d029?d=retro".to_string(),
+                is_bot: false,
             })
         );
     }

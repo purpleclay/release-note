@@ -165,7 +165,7 @@ impl PlatformResolver for GitHubResolver {
         let contributor = username.map(|username| {
             let (avatar_url, is_bot) = self
                 .query_user_api(&username)
-                .unwrap_or_else(|| (String::new(), false));
+                .unwrap_or_else(|| (Self::generate_gravatar_url(email), false));
 
             log::info!(
                 "resolved contributor {} for email: {} (bot: {})",
@@ -423,6 +423,54 @@ mod tests {
             Some(Contributor {
                 username: "claude".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
+                is_bot: false,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_gravatar_when_user_api_fails() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/repos/{}/{}/commits/a1b2c3d",
+                REPO_OWNER, REPO_NAME
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "author": {
+                    "login": "hamlet"
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/users/hamlet"))
+            .respond_with(ResponseTemplate::new(429))
+            .mount(&mock_server)
+            .await;
+
+        let mut resolver = GitHubResolver::new(&format!(
+            "https://github.com/{}/{}.git",
+            REPO_OWNER, REPO_NAME
+        ))
+        .unwrap();
+        resolver.with_api_url(mock_server.uri());
+
+        let contributor =
+            tokio::task::spawn_blocking(move || resolver.resolve("a1b2c3d", "hamlet@denmark.dk"))
+                .await
+                .unwrap();
+
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "hamlet".to_string(),
+                avatar_url: "https://www.gravatar.com/avatar/7d6b35201428278c124e8bb39b932896790646965aec6df4b8673f0bc850d029?d=retro".to_string(),
                 is_bot: false,
             })
         );

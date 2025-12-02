@@ -3,6 +3,7 @@ mod commit;
 use commit::CommitBuilder;
 use release_note::analyzer::{CategorizedCommits, CommitCategory, ContributorSummary};
 use release_note::markdown;
+use release_note::platform::Platform;
 use std::collections::HashMap;
 
 // Fixed timestamp for tests: November 27, 2025 00:00:00 UTC
@@ -108,6 +109,57 @@ fn displays_contributors_with_github_commit_links() {
         repo: "globe-theatre".to_string(),
         url: "https://github.com/shakespeare/globe-theatre".to_string(),
         git_ref: "v1.0.0".to_string(),
+        platform: Platform::GitHub,
+    };
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors,
+    };
+    let result = markdown::render_history(&categorized, Some(&project), TEST_RELEASE_DATE).unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn displays_contributors_without_links_for_gitlab() {
+    use release_note::metadata::ProjectMetadata;
+
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![CommitBuilder::new("feat: all the world's a stage").build()],
+    );
+
+    let contributors = vec![
+        ContributorSummary {
+            username: "hamlet".to_string(),
+            avatar_url: "https://gitlab.com/uploads/-/system/user/avatar/123/avatar.png"
+                .to_string(),
+            count: 3,
+            is_bot: false,
+            first_commit_timestamp: 1748390400,
+            last_commit_timestamp: 1748476800,
+        },
+        ContributorSummary {
+            username: "ophelia".to_string(),
+            avatar_url: "https://gitlab.com/uploads/-/system/user/avatar/456/avatar.png"
+                .to_string(),
+            count: 1,
+            is_bot: false,
+            first_commit_timestamp: 1748390400,
+            last_commit_timestamp: 1748390400,
+        },
+    ];
+
+    let project = ProjectMetadata {
+        host: "gitlab.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        url: "https://gitlab.com/shakespeare/globe-theatre".to_string(),
+        git_ref: "v1.0.0".to_string(),
+        platform: Platform::GitLab,
     };
 
     let categorized = CategorizedCommits {

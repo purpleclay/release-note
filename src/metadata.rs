@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
 
+use crate::platform::Platform;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectMetadata {
     pub host: String,
@@ -8,11 +10,13 @@ pub struct ProjectMetadata {
     pub repo: String,
     pub url: String,
     pub git_ref: String,
+    pub platform: Platform,
 }
 
 impl ProjectMetadata {
     pub fn new(origin_url: &str, git_ref: impl Into<String>) -> Result<Self> {
         let (host, owner, repo) = parse_git_url(origin_url)?;
+        let platform = Platform::detect(origin_url);
 
         Ok(ProjectMetadata {
             url: format!("https://{}/{}/{}", host, owner, repo),
@@ -20,6 +24,7 @@ impl ProjectMetadata {
             owner,
             repo,
             git_ref: git_ref.into(),
+            platform,
         })
     }
 }

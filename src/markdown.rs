@@ -10,7 +10,7 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endmacro commit_contributors -%}
 
 {%- macro contributor_link(contributor, project) -%}
-{%- if project -%}
+{%- if project and project.platform == "github" -%}
 {%- set since = contributor.first_commit_timestamp | date(format="%Y-%m-%d") -%}
 {%- set until = contributor.last_commit_timestamp | date(format="%Y-%m-%d") -%}
 [**`{{ contributor.count }}`**]({{ project.url }}/commits/{{ project.git_ref }}?author={{ contributor.username }}&since={{ since }}&until={{ until }}) commit{% if contributor.count != 1 %}s{% endif %}

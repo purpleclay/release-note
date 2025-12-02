@@ -8,6 +8,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::git::Commit;
+use crate::platform::Platform;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
 pub struct Contributor {
@@ -79,19 +80,23 @@ pub struct ContributorResolver {
 
 impl ContributorResolver {
     pub fn from_url(url: &str) -> Result<Option<Self>> {
-        if url.contains("github.com") {
-            log::info!("project is hosted on GitHub (github.com)");
-            Ok(Some(Self {
-                platform_resolver: Box::new(GitHubResolver::new(url)?),
-            }))
-        } else if url.contains("gitlab.com") {
-            log::info!("project is hosted on GitLab (gitlab.com)");
-            Ok(Some(Self {
-                platform_resolver: Box::new(GitLabResolver::new(url)?),
-            }))
-        } else {
-            log::warn!("unrecognized platform, contributor resolution will be skipped");
-            Ok(None)
+        match Platform::detect(url) {
+            Platform::GitHub => {
+                log::info!("project is hosted on GitHub (github.com)");
+                Ok(Some(Self {
+                    platform_resolver: Box::new(GitHubResolver::new(url)?),
+                }))
+            }
+            Platform::GitLab => {
+                log::info!("project is hosted on GitLab (gitlab.com)");
+                Ok(Some(Self {
+                    platform_resolver: Box::new(GitLabResolver::new(url)?),
+                }))
+            }
+            Platform::Unknown => {
+                log::warn!("unrecognized platform, contributor resolution will be skipped");
+                Ok(None)
+            }
         }
     }
 

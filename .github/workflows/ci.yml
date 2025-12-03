@@ -29,7 +29,7 @@ jobs:
     name: rustfmt / stable
     steps:
       - name: Checkout
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Install Nix
         uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
@@ -52,7 +52,7 @@ jobs:
     name: clippy / stable
     steps:
       - name: Checkout repository
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Install Nix
         uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
@@ -81,7 +81,7 @@ jobs:
     name: build-fast / linux_x86_64_musl
     steps:
       - name: Checkout
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -110,7 +110,7 @@ jobs:
         os: [ubuntu-24.04, macos-15]
     steps:
       - name: Checkout
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Install Nix
         uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
@@ -158,7 +158,7 @@ jobs:
             use-zigbuild: false
     steps:
       - name: Checkout
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable

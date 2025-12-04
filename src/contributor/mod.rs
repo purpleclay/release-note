@@ -81,19 +81,19 @@ pub struct ContributorResolver {
 impl ContributorResolver {
     pub fn from_url(url: &str) -> Result<Option<Self>> {
         match Platform::detect(url) {
-            Platform::GitHub => {
+            Platform::GitHub(_) => {
                 log::info!("project is hosted on GitHub (github.com)");
                 Ok(Some(Self {
                     platform_resolver: Box::new(GitHubResolver::new(url)?),
                 }))
             }
-            Platform::GitLab => {
+            Platform::GitLab(_) => {
                 log::info!("project is hosted on GitLab (gitlab.com)");
                 Ok(Some(Self {
                     platform_resolver: Box::new(GitLabResolver::new(url)?),
                 }))
             }
-            Platform::Unknown => {
+            Platform::Unknown(_) => {
                 log::warn!("unrecognized platform, contributor resolution will be skipped");
                 Ok(None)
             }

@@ -7,7 +7,7 @@ expression: result
 [**`1`**](#new-features) new feature
 
 ## New Features
-- e313b4f0ab857239e313b4f0ab857239e313b4f0 add theatrical script formatting
+- **`e313b4f`** add theatrical script formatting
 
   The script format preserves the playwright's original line formatting without alteration:
 

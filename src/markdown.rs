@@ -1,4 +1,7 @@
-use crate::analyzer::{CategorizedCommits, CommitCategory};
+use crate::{
+    analyzer::{CategorizedCommits, CommitCategory},
+    platform::Platform,
+};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -9,17 +12,18 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if commit.contributors %} ({{ commit.contributors | mention | join(sep=", ") }}){% endif -%}
 {%- endmacro commit_contributors -%}
 
-{%- macro contributor_link(contributor, project) -%}
-{%- if project and project.platform == "github" -%}
+{%- macro contributor_link(contributor) -%}
 {%- set since = contributor.first_commit_timestamp | date(format="%Y-%m-%d") -%}
 {%- set until = contributor.last_commit_timestamp | date(format="%Y-%m-%d") -%}
-[**`{{ contributor.count }}`**]({{ project.url }}/commits/{{ project.git_ref }}?author={{ contributor.username }}&since={{ since }}&until={{ until }}) commit{% if contributor.count != 1 %}s{% endif %}
+{%- set url = contributor_commits_url(author=contributor.username, since=since, until=until) -%}
+{%- if url -%}
+[**`{{ contributor.count }}`**]({{ url }}) commit{% if contributor.count != 1 %}s{% endif %}
 {%- else -%}
 {{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %}
 {%- endif -%}
 {%- endmacro contributor_link -%}
 
-## {% if project and project.git_ref %}{{ project.git_ref }} - {% endif %}{{ release_date | date(format="%B %d, %Y") }}
+## {% if git_ref %}{{ git_ref }} - {% endif %}{{ release_date | date(format="%B %d, %Y") }}
 
 {%- set stats = [] -%}
 {%- if breaking -%}
@@ -59,13 +63,13 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if contributors %}
 ## Contributors
 {%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
-- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor, project=project) }})
+- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor) }})
 {%- endfor %}
 {% endif %}
 {%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -76,7 +80,7 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -87,7 +91,7 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -100,7 +104,7 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if filtered_deps %}
 ## Dependency Updates
 {%- for commit in filtered_deps %}
-- {{ commit.hash }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -324,9 +328,53 @@ fn strip_conventional_prefix_filter(
     Ok(Value::String(stripped))
 }
 
+fn register_platform_functions(tera: &mut tera::Tera, git_ref: Option<&str>, platform: &Platform) {
+    let platform = platform.clone();
+
+    tera.register_function("commit_url", {
+        let platform = platform.clone();
+        move |args: &HashMap<String, Value>| -> tera::Result<Value> {
+            let sha = args
+                .get("sha")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| tera::Error::msg("commit_url requires 'sha'"))?;
+
+            let short_sha = &sha[..7.min(sha.len())];
+
+            if let Some(url) = platform.commit_url(sha) {
+                Ok(Value::String(format!("[**`{}`**]({})", short_sha, url)))
+            } else {
+                Ok(Value::String(format!("**`{}`**", short_sha)))
+            }
+        }
+    });
+
+    tera.register_function("contributor_commits_url", {
+        let platform = platform.clone();
+        let git_ref = git_ref.map(|s| s.to_string());
+        move |args: &HashMap<String, Value>| -> tera::Result<Value> {
+            let author = args.get("author").and_then(|v| v.as_str()).unwrap_or("");
+            let since = args.get("since").and_then(|v| v.as_str()).unwrap_or("");
+            let until = args.get("until").and_then(|v| v.as_str()).unwrap_or("");
+
+            match &git_ref {
+                Some(ref_name) => {
+                    if let Some(url) = platform.commits_url(ref_name, author, since, until) {
+                        Ok(Value::String(url))
+                    } else {
+                        Ok(Value::Null)
+                    }
+                }
+                None => Ok(Value::Null),
+            }
+        }
+    });
+}
+
 pub fn render_history(
     categorized: &CategorizedCommits,
-    project: Option<&crate::metadata::ProjectMetadata>,
+    platform: &Platform,
+    git_ref: Option<&str>,
     release_date: i64,
 ) -> Result<String> {
     if categorized.by_category.is_empty() {
@@ -345,9 +393,12 @@ pub fn render_history(
         strip_conventional_prefix_filter,
     );
 
+    register_platform_functions(&mut tera, git_ref, platform);
+
     let mut context = tera::Context::new();
     context.insert("contributors", &categorized.contributors);
-    context.insert("project", &project);
+    context.insert("platform", &platform);
+    context.insert("git_ref", &git_ref);
     context.insert("release_date", &release_date);
 
     if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {

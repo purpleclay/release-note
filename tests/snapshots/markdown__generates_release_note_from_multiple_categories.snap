@@ -7,22 +7,22 @@ expression: result
 [**`2`**](#breaking-changes) breaking changes • [**`2`**](#new-features) new features • [**`1`**](#bug-fixes) bug fixed
 
 ## Breaking Changes
-- 4cfa67f04adbe4244cfa67f04adbe4244cfa67f0 the course of true love never did run smooth
+- **`4cfa67f`** the course of true love never did run smooth
 
   Lord, what fools these mortals be! The lunatic, the lover and the poet are of imagination all compact.
-- b0a136dca8442f6cb0a136dca8442f6cb0a136dc now is the winter of our discontent
+- **`b0a136d`** now is the winter of our discontent
 
   BREAKING CHANGE: made glorious summer by this sun of York.
 ## New Features
-- 8c8a505c3365cb6c8c8a505c3365cb6c8c8a505c all the world's a stage
+- **`8c8a505`** all the world's a stage
 
   And all the men and women merely players. They have their exits and their entrances; and one man in his time plays many parts.
-- 70204b7eaa8fbf4070204b7eaa8fbf4070204b7e to be or not to be
+- **`70204b7`** to be or not to be
 ## Bug Fixes
-- fd0ff5c9d7cd4bf9fd0ff5c9d7cd4bf9fd0ff5c9 though she be but little, she is fierce
+- **`fd0ff5c`** though she be but little, she is fierce
 
   Some are born great, some achieve greatness, and some have greatness thrust upon them.
 ## Dependency Updates
-- 7c555da727251e1b7c555da727251e1b7c555da7 the better part of valor is discretion
+- **`7c555da`** the better part of valor is discretion
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*

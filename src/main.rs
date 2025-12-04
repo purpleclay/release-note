@@ -1,12 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, arg};
+use release_note::platform::Platform;
 use std::path::PathBuf;
 
 use release_note::analyzer::CommitAnalyzer;
 use release_note::contributor;
 use release_note::git::GitRepo;
 use release_note::markdown;
-use release_note::metadata::ProjectMetadata;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -74,16 +74,11 @@ fn main() -> Result<()> {
         resolver.resolve_contributors(&mut history);
     }
 
-    let project_metadata = repo.origin_url().and_then(|url| {
-        let git_ref = args.from.clone().or_else(|| repo.current_ref().ok())?;
-        match ProjectMetadata::new(url, git_ref) {
-            Ok(metadata) => Some(metadata),
-            Err(e) => {
-                log::info!("failed to parse project metadata: {}", e);
-                None
-            }
-        }
-    });
+    let git_ref = args.from.clone().or_else(|| repo.current_ref().ok());
+    let platform = repo
+        .origin_url()
+        .map(Platform::detect)
+        .unwrap_or_else(|| Platform::Unknown(String::new()));
 
     let categorized = CommitAnalyzer::analyze(&history);
     log::info!("");
@@ -95,7 +90,7 @@ fn main() -> Result<()> {
 
     println!(
         "{}",
-        markdown::render_history(&categorized, project_metadata.as_ref(), release_date)?
+        markdown::render_history(&categorized, &platform, git_ref.as_deref(), release_date)?
     );
     Ok(())
 }

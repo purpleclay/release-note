@@ -1442,6 +1442,7 @@ dependencies = [
  "tempfile",
  "tera",
  "textwrap",
+ "thiserror",
  "tokio",
  "urlencoding",
  "wiremock",

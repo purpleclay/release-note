@@ -7,8 +7,21 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use semver::Version;
 use serde::Serialize;
+use thiserror::Error;
 
 use crate::contributor::Contributor;
+
+#[derive(Error, Debug)]
+pub enum GitRepoError {
+    #[error("repository is in a detached HEAD state with incomplete history")]
+    DetachedHead,
+
+    #[error("repository is a shallow clone with incomplete history")]
+    ShallowClone,
+
+    #[error("repository is empty and contains no commits")]
+    EmptyRepository,
+}
 
 static GIT_TRAILER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([A-Za-z][\w-]*)\s*:\s*(.+)$").unwrap());
@@ -299,6 +312,21 @@ impl GitRepo {
         let work_dir = repo
             .workdir()
             .context("repository has no working directory")?;
+
+        if repo.is_empty()? {
+            return Err(GitRepoError::EmptyRepository.into());
+        }
+
+        if repo.is_shallow() {
+            return Err(GitRepoError::ShallowClone.into());
+        }
+
+        {
+            let head = repo.head()?;
+            if !head.is_branch() && !head.is_tag() {
+                return Err(GitRepoError::DetachedHead.into());
+            }
+        }
 
         let canonical_abs_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
         let canonical_work_dir = work_dir

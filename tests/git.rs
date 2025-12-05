@@ -178,6 +178,60 @@ fn includes_entire_history_on_first_release() -> Result<()> {
 }
 
 #[test]
+fn fails_on_empty_repository() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let _repo = Repository::init(temp_dir.path())?;
+
+    let result = GitRepo::open(temp_dir.path());
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(err.to_string().contains("empty"));
+
+    Ok(())
+}
+
+#[test]
+fn fails_on_shallow_clone() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        r#"
+        feat: we know what we are, but know not what we may be
+        fix: some are born great, some achieve greatness
+        "#,
+    )?;
+
+    let shallow_file = test_repo.repo.path().join("shallow");
+    std::fs::write(&shallow_file, format!("{}\n", test_repo.commits[0]))?;
+
+    let result = GitRepo::open(test_repo.path());
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(err.to_string().contains("shallow"));
+
+    Ok(())
+}
+
+#[test]
+fn fails_on_detached_head() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        r#"
+        feat: what's in a name? that which we call a rose
+        fix: parting is such sweet sorrow
+        "#,
+    )?;
+
+    let commit_oid = test_repo.commits[0];
+    let commit = test_repo.repo.find_commit(commit_oid)?;
+    test_repo.repo.set_head_detached(commit.id())?;
+
+    let result = GitRepo::open(test_repo.path());
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(err.to_string().contains("detached"));
+
+    Ok(())
+}
+
+#[test]
 fn extracts_and_strips_linked_issues() -> Result<()> {
     let mut test_repo = TestRepo::new()?;
 
@@ -526,19 +580,14 @@ Co-authored-by: Christopher Marlowe <kit@rose-theatre.com>"#;
 
     assert_eq!(commits.len(), 1);
 
-    // Verify linked issues were extracted and stripped (sorted by owner, repo, number)
     assert_eq!(commits[0].linked_issues.len(), 3);
-    // Issues without owner/repo come first, sorted by number
     assert_eq!(commits[0].linked_issues[0].number, 42);
     assert_eq!(commits[0].linked_issues[0].owner, None);
     assert_eq!(commits[0].linked_issues[1].number, 256);
     assert_eq!(commits[0].linked_issues[1].owner, None);
-    // Then issues with owner/repo
     assert_eq!(commits[0].linked_issues[2].number, 108);
     assert_eq!(commits[0].linked_issues[2].owner.as_deref(), Some("owner"));
     assert_eq!(commits[0].linked_issues[2].repo.as_deref(), Some("repo"));
-
-    // Verify excessive blank lines were normalized (4 newlines → 2)
     assert_eq!(
         commits[0].body.as_deref(),
         Some(
@@ -550,7 +599,6 @@ performance, mirroring reality back to the audience."#
         )
     );
 
-    // Verify trailers were detected
     assert_eq!(commits[0].trailers.len(), 2);
     match &commits[0].trailers[0] {
         GitTrailer::SignedOffBy { name, email } => {

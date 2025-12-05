@@ -2,7 +2,7 @@
 source: tests/markdown.rs
 expression: result
 ---
-## November 27, 2025
+## HEAD - November 27, 2025
 
 [**`2`**](#breaking-changes) breaking changes • [**`2`**](#new-features) new features • [**`1`**](#bug-fixes) bug fixed
 

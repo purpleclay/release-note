@@ -58,7 +58,7 @@ fn generates_release_note_from_multiple_categories() {
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -114,8 +114,7 @@ fn displays_contributors_with_github_commit_links() {
         contributors,
     };
     let result =
-        markdown::render_history(&categorized, &platform, Some("v1.0.0"), TEST_RELEASE_DATE)
-            .unwrap();
+        markdown::render_history(&categorized, &platform, "v1.0.0", TEST_RELEASE_DATE).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -157,8 +156,7 @@ fn displays_contributors_without_links_for_gitlab() {
         contributors,
     };
     let result =
-        markdown::render_history(&categorized, &platform, Some("v1.0.0"), TEST_RELEASE_DATE)
-            .unwrap();
+        markdown::render_history(&categorized, &platform, "v1.0.0", TEST_RELEASE_DATE).unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -193,7 +191,7 @@ the attribute to awe and majesty.",
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -229,7 +227,7 @@ That is the last scene of all, that ends this strange eventful history.",
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -261,7 +259,7 @@ fn unwraps_numbered_lists_to_single_lines() {
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -296,7 +294,7 @@ These lines must maintain their integrity as written by the immortal bard.",
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -328,7 +326,7 @@ This soliloquy explores the fundamental nature of human existence and mortality.
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -378,7 +376,7 @@ Additional context on Elizabethan staging conventions is essential for authentic
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -396,7 +394,7 @@ fn generates_no_release_note_when_no_commits() {
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -440,7 +438,7 @@ fn excludes_git_trailers() {
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -498,7 +496,7 @@ fn displays_multiple_contributors() {
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -548,7 +546,7 @@ fn filters_bot_contributors() {
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();
@@ -591,7 +589,7 @@ Shakespeare so masterfully employed.",
     let result = markdown::render_history(
         &categorized,
         &Platform::Unknown(String::new()),
-        None,
+        "HEAD",
         TEST_RELEASE_DATE,
     )
     .unwrap();

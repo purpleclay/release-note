@@ -23,7 +23,7 @@ pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endif -%}
 {%- endmacro contributor_link -%}
 
-## {% if git_ref %}{{ git_ref }} - {% endif %}{{ release_date | date(format="%B %d, %Y") }}
+## {{ git_ref }} - {{ release_date | date(format="%B %d, %Y") }}
 
 {%- set stats = [] -%}
 {%- if breaking -%}
@@ -328,7 +328,7 @@ fn strip_conventional_prefix_filter(
     Ok(Value::String(stripped))
 }
 
-fn register_platform_functions(tera: &mut tera::Tera, git_ref: Option<&str>, platform: &Platform) {
+fn register_platform_functions(tera: &mut tera::Tera, git_ref: &str, platform: &Platform) {
     let platform = platform.clone();
 
     tera.register_function("commit_url", {
@@ -351,21 +351,16 @@ fn register_platform_functions(tera: &mut tera::Tera, git_ref: Option<&str>, pla
 
     tera.register_function("contributor_commits_url", {
         let platform = platform.clone();
-        let git_ref = git_ref.map(|s| s.to_string());
+        let git_ref = git_ref.to_string();
         move |args: &HashMap<String, Value>| -> tera::Result<Value> {
             let author = args.get("author").and_then(|v| v.as_str()).unwrap_or("");
             let since = args.get("since").and_then(|v| v.as_str()).unwrap_or("");
             let until = args.get("until").and_then(|v| v.as_str()).unwrap_or("");
 
-            match &git_ref {
-                Some(ref_name) => {
-                    if let Some(url) = platform.commits_url(ref_name, author, since, until) {
-                        Ok(Value::String(url))
-                    } else {
-                        Ok(Value::Null)
-                    }
-                }
-                None => Ok(Value::Null),
+            if let Some(url) = platform.commits_url(&git_ref, author, since, until) {
+                Ok(Value::String(url))
+            } else {
+                Ok(Value::Null)
             }
         }
     });
@@ -374,7 +369,7 @@ fn register_platform_functions(tera: &mut tera::Tera, git_ref: Option<&str>, pla
 pub fn render_history(
     categorized: &CategorizedCommits,
     platform: &Platform,
-    git_ref: Option<&str>,
+    git_ref: &str,
     release_date: i64,
 ) -> Result<String> {
     if categorized.by_category.is_empty() {
@@ -398,7 +393,7 @@ pub fn render_history(
     let mut context = tera::Context::new();
     context.insert("contributors", &categorized.contributors);
     context.insert("platform", &platform);
-    context.insert("git_ref", &git_ref);
+    context.insert("git_ref", git_ref);
     context.insert("release_date", &release_date);
 
     if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, arg};
 use release_note::platform::Platform;
 use std::path::PathBuf;
@@ -74,7 +74,10 @@ fn main() -> Result<()> {
         resolver.resolve_contributors(&mut history);
     }
 
-    let git_ref = args.from.clone().or_else(|| repo.current_ref().ok());
+    let git_ref = args.from.clone().map(Ok).unwrap_or_else(|| {
+        repo.current_ref()
+            .context("failed to determine current reference")
+    })?;
     let platform = repo
         .origin_url()
         .map(Platform::detect)
@@ -90,7 +93,7 @@ fn main() -> Result<()> {
 
     println!(
         "{}",
-        markdown::render_history(&categorized, &platform, git_ref.as_deref(), release_date)?
+        markdown::render_history(&categorized, &platform, &git_ref, release_date)?
     );
     Ok(())
 }

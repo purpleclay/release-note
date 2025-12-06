@@ -131,7 +131,7 @@ jobs:
           shared-key: "test-${{ matrix.os }}"
 
       - name: Run tests
-        run: nix develop -c cargo test
+        run: nix develop -c cargo nextest run
 
   build:
     runs-on: ${{ matrix.platform.runs-on }}

@@ -44,6 +44,7 @@
         buildInputs = with pkgs; [
           alejandra
           cargo-insta
+          cargo-nextest
           nil
           openssl
           shellcheck

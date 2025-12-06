@@ -1,4 +1,5 @@
 use super::{Contributor, PlatformResolver};
+use crate::platform::Platform;
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -11,47 +12,26 @@ pub struct GitLabResolver {
 }
 
 impl GitLabResolver {
-    pub fn new(project_url: &str) -> Result<Self> {
-        let project_path = Self::parse_gitlab_url(project_url)?;
-        let gitlab_token = std::env::var("GITLAB_TOKEN").ok();
+    pub fn new(platform: &Platform) -> Result<Self> {
+        match platform {
+            Platform::GitLab {
+                project_path,
+                graphql_url,
+                api_url,
+                ..
+            } => {
+                let gitlab_token = std::env::var("GITLAB_TOKEN").ok();
 
-        Ok(Self {
-            cache: HashMap::new(),
-            gitlab_token,
-            project_path,
-            graphql_url: "https://gitlab.com/api/graphql".to_string(),
-            rest_api_url: "https://gitlab.com/api/v4".to_string(),
-        })
-    }
-
-    #[cfg(test)]
-    pub fn with_api_urls(&mut self, graphql_url: String, rest_api_url: String) {
-        self.graphql_url = graphql_url;
-        self.rest_api_url = rest_api_url;
-    }
-
-    fn parse_gitlab_url(url: &str) -> Result<String> {
-        let path = if url.starts_with("https://") {
-            url.strip_prefix("https://")
-                .and_then(|s| s.split_once('/'))
-                .map(|(_, path)| path)
-        } else if url.starts_with("git@") {
-            url.split_once(':').map(|(_, path)| path)
-        } else {
-            None
-        };
-
-        if let Some(path) = path {
-            let cleaned = path.trim_end_matches(".git");
-            if cleaned.contains('/') {
-                return Ok(cleaned.to_string());
+                Ok(Self {
+                    cache: HashMap::new(),
+                    gitlab_token,
+                    project_path: project_path.clone(),
+                    graphql_url: graphql_url.clone(),
+                    rest_api_url: api_url.clone(),
+                })
             }
+            _ => anyhow::bail!("GitLabResolver requires a GitLab platform"),
         }
-
-        anyhow::bail!(
-            "failed to extract project path from GitLab from malformed origin: {}",
-            url
-        )
     }
 
     fn extract_username_from_noreply(email: &str) -> Option<String> {
@@ -296,6 +276,15 @@ mod tests {
     const NESTED_PROJECT_PATH: &str = "shakespeare/tragedies/othello";
     const AVATAR_URL: &str = "https://secure.gravatar.com/avatar/test123";
 
+    fn create_test_platform(project_path: &str, api_url: &str, graphql_url: &str) -> Platform {
+        Platform::GitLab {
+            url: format!("https://gitlab.com/{}", project_path),
+            api_url: api_url.to_string(),
+            graphql_url: graphql_url.to_string(),
+            project_path: project_path.to_string(),
+        }
+    }
+
     #[tokio::test]
     async fn resolves_gitlab_username_using_graphql_and_user_api() {
         use wiremock::matchers::{body_json, method, path};
@@ -365,12 +354,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitLabResolver::new(&format!("git@gitlab.com:{}.git", PROJECT_PATH)).unwrap();
-        resolver.with_api_urls(
-            format!("{}/api/graphql", mock_server.uri()),
-            format!("{}/api/v4", mock_server.uri()),
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
         );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("a1b2c3d", "hamlet@globe-theatre.com")
@@ -425,13 +414,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitLabResolver::new(&format!("https://gitlab.com/{}.git", NESTED_PROJECT_PATH))
-                .unwrap();
-        resolver.with_api_urls(
-            format!("{}/api/graphql", mock_server.uri()),
-            format!("{}/api/v4", mock_server.uri()),
+        let platform = create_test_platform(
+            NESTED_PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
         );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("e4f5g6h", "123456-ophelia@users.noreply.gitlab.com")
@@ -486,12 +474,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitLabResolver::new(&format!("https://gitlab.com/{}.git", PROJECT_PATH)).unwrap();
-        resolver.with_api_urls(
-            format!("{}/api/graphql", mock_server.uri()),
-            format!("{}/api/v4", mock_server.uri()),
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
         );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("i7j8k9l", "noreply@anthropic.com")
@@ -560,12 +548,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitLabResolver::new(&format!("https://gitlab.com/{}.git", PROJECT_PATH)).unwrap();
-        resolver.with_api_urls(
-            format!("{}/api/graphql", mock_server.uri()),
-            format!("{}/api/v4", mock_server.uri()),
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
         );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let (contributor1, contributor2) = tokio::task::spawn_blocking(move || {
             let contributor1 = resolver.resolve("m1n2o3p", "othello@globe-theatre.com");
@@ -653,12 +641,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitLabResolver::new(&format!("git@gitlab.com:{}.git", PROJECT_PATH)).unwrap();
-        resolver.with_api_urls(
-            format!("{}/api/graphql", mock_server.uri()),
-            format!("{}/api/v4", mock_server.uri()),
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
         );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("u7v8w9x", "puck-bot@globe-theatre.com")
@@ -741,12 +729,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitLabResolver::new(&format!("https://gitlab.com/{}.git", PROJECT_PATH)).unwrap();
-        resolver.with_api_urls(
-            format!("{}/api/graphql", mock_server.uri()),
-            format!("{}/api/v4", mock_server.uri()),
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
         );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor =
             tokio::task::spawn_blocking(move || resolver.resolve("a1b2c3d", "hamlet@denmark.dk"))

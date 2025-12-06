@@ -392,7 +392,6 @@ pub fn render_history(
 
     let mut context = tera::Context::new();
     context.insert("contributors", &categorized.contributors);
-    context.insert("platform", &platform);
     context.insert("git_ref", git_ref);
     context.insert("release_date", &release_date);
 

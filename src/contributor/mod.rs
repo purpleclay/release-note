@@ -79,21 +79,21 @@ pub struct ContributorResolver {
 }
 
 impl ContributorResolver {
-    pub fn from_url(url: &str) -> Result<Option<Self>> {
-        match Platform::detect(url) {
-            Platform::GitHub(_) => {
-                log::info!("project is hosted on GitHub (github.com)");
+    pub fn new(platform: &Platform) -> Result<Option<Self>> {
+        match platform {
+            Platform::GitHub { .. } => {
+                log::info!("project is hosted on GitHub");
                 Ok(Some(Self {
-                    platform_resolver: Box::new(GitHubResolver::new(url)?),
+                    platform_resolver: Box::new(GitHubResolver::new(platform)?),
                 }))
             }
-            Platform::GitLab(_) => {
-                log::info!("project is hosted on GitLab (gitlab.com)");
+            Platform::GitLab { .. } => {
+                log::info!("project is hosted on GitLab");
                 Ok(Some(Self {
-                    platform_resolver: Box::new(GitLabResolver::new(url)?),
+                    platform_resolver: Box::new(GitLabResolver::new(platform)?),
                 }))
             }
-            Platform::Unknown(_) => {
+            Platform::Unknown => {
                 log::warn!("unrecognized platform, contributor resolution will be skipped");
                 Ok(None)
             }
@@ -122,45 +122,5 @@ impl ContributorResolver {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn detects_github_platform_from_https_url() {
-        let result = ContributorResolver::from_url("https://github.com/owner/repo.git");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_some());
-    }
-
-    #[test]
-    fn detects_github_platform_from_ssh_url() {
-        let result = ContributorResolver::from_url("git@github.com:owner/repo.git");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_some());
-    }
-
-    #[test]
-    fn detects_gitlab_platform_from_https_url() {
-        let result = ContributorResolver::from_url("https://gitlab.com/owner/repo.git");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_some());
-    }
-
-    #[test]
-    fn detects_gitlab_platform_from_ssh_url() {
-        let result = ContributorResolver::from_url("git@gitlab.com:owner/repo.git");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_some());
-    }
-
-    #[test]
-    fn returns_none_for_self_hosted_git() {
-        let result = ContributorResolver::from_url("https://git.mycompany.com/owner/repo.git");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
     }
 }

@@ -1,4 +1,5 @@
 use super::{Contributor, PlatformResolver};
+use crate::platform::Platform;
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -11,48 +12,26 @@ pub struct GitHubResolver {
 }
 
 impl GitHubResolver {
-    pub fn new(project_url: &str) -> Result<Self> {
-        let (repo_owner, repo_name) = Self::parse_github_url(project_url)?;
-        let github_token = std::env::var("GITHUB_TOKEN").ok();
+    pub fn new(platform: &Platform) -> Result<Self> {
+        match platform {
+            Platform::GitHub {
+                owner,
+                repo,
+                api_url,
+                ..
+            } => {
+                let github_token = std::env::var("GITHUB_TOKEN").ok();
 
-        Ok(Self {
-            cache: HashMap::new(),
-            github_token,
-            repo_owner,
-            repo_name,
-            api_url: "https://api.github.com".to_string(),
-        })
-    }
-
-    #[cfg(test)]
-    pub fn with_api_url(&mut self, api_url: String) {
-        self.api_url = api_url;
-    }
-
-    fn parse_github_url(url: &str) -> Result<(String, String)> {
-        let path = if url.starts_with("https://") {
-            url.strip_prefix("https://")
-                .and_then(|s| s.split_once('/'))
-                .map(|(_, path)| path)
-        } else if url.starts_with("git@") {
-            url.split_once(':').map(|(_, path)| path)
-        } else {
-            None
-        };
-
-        if let Some(path) = path {
-            let cleaned = path.trim_end_matches(".git");
-            if let Some((owner, repo)) = cleaned.split_once('/')
-                && !repo.contains('/')
-            {
-                return Ok((owner.to_string(), repo.to_string()));
+                Ok(Self {
+                    cache: HashMap::new(),
+                    github_token,
+                    repo_owner: owner.clone(),
+                    repo_name: repo.clone(),
+                    api_url: api_url.clone(),
+                })
             }
+            _ => anyhow::bail!("GitHubResolver requires a GitHub platform"),
         }
-
-        anyhow::bail!(
-            "failed to extract project owner and name from GitHub from malformed origin: {}",
-            url
-        )
     }
 
     fn extract_username_from_noreply(email: &str) -> Option<String> {
@@ -194,6 +173,15 @@ mod tests {
     const REPO_NAME: &str = "globe-theatre";
     const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/2651292?v=4";
 
+    fn create_test_platform(api_url: &str) -> Platform {
+        Platform::GitHub {
+            url: format!("https://github.com/{}/{}", REPO_OWNER, REPO_NAME),
+            api_url: api_url.to_string(),
+            owner: REPO_OWNER.to_string(),
+            repo: REPO_NAME.to_string(),
+        }
+    }
+
     #[tokio::test]
     async fn resolves_github_username_using_commit_api() {
         use wiremock::matchers::{method, path};
@@ -226,10 +214,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver =
-            GitHubResolver::new(&format!("git@github.com:{}/{}.git", REPO_OWNER, REPO_NAME))
-                .unwrap();
-        resolver.with_api_url(mock_server.uri());
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("599e13c", "hamlet[bot]@globe-theatre.com")
@@ -277,12 +263,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver = GitHubResolver::new(&format!(
-            "https://github.com/{}/{}.git",
-            REPO_OWNER, REPO_NAME
-        ))
-        .unwrap();
-        resolver.with_api_url(mock_server.uri());
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let (contributor1, contributor2) = tokio::task::spawn_blocking(move || {
             let contributor1 = resolver.resolve("3a1d4ed", "ophelia@globe-theatre.com");
@@ -317,12 +299,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver = GitHubResolver::new(&format!(
-            "https://github.com/{}/{}.git",
-            REPO_OWNER, REPO_NAME
-        ))
-        .unwrap();
-        resolver.with_api_url(mock_server.uri());
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let username =
             tokio::task::spawn_blocking(move || resolver.resolve("da49181", "test@example.com"))
@@ -357,12 +335,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver = GitHubResolver::new(&format!(
-            "https://github.com/{}/{}.git",
-            REPO_OWNER, REPO_NAME
-        ))
-        .unwrap();
-        resolver.with_api_url(mock_server.uri());
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("127fca5", "12345678+prospero@users.noreply.github.com")
@@ -405,12 +379,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver = GitHubResolver::new(&format!(
-            "https://github.com/{}/{}.git",
-            REPO_OWNER, REPO_NAME
-        ))
-        .unwrap();
-        resolver.with_api_url(mock_server.uri());
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
             resolver.resolve("f6ab8dd", "noreply@anthropic.com")
@@ -454,12 +424,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let mut resolver = GitHubResolver::new(&format!(
-            "https://github.com/{}/{}.git",
-            REPO_OWNER, REPO_NAME
-        ))
-        .unwrap();
-        resolver.with_api_url(mock_server.uri());
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor =
             tokio::task::spawn_blocking(move || resolver.resolve("a1b2c3d", "hamlet@denmark.dk"))

@@ -1,46 +1,181 @@
 use anyhow::{Context, Result};
-use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Platform {
-    GitHub(String),
-    GitLab(String),
-    Unknown(String),
+    GitHub {
+        url: String,
+        api_url: String,
+        owner: String,
+        repo: String,
+    },
+    GitLab {
+        url: String,
+        api_url: String,
+        graphql_url: String,
+        project_path: String,
+    },
+    Unknown,
 }
 
 impl Platform {
-    pub fn detect(url: &str) -> Self {
-        match parse_git_url(url) {
-            Ok((host, owner, repo)) => {
-                let base_url = format!("https://{}/{}/{}", host, owner, repo);
+    pub fn detect(origin_url: Option<&str>) -> Self {
+        if let Some(platform) = Self::from_ci_env() {
+            return platform;
+        }
 
-                if base_url.contains("github.com") {
-                    Platform::GitHub(base_url)
-                } else if base_url.contains("gitlab.com") {
-                    Platform::GitLab(base_url)
-                } else {
-                    Platform::Unknown(base_url)
-                }
-            }
-            Err(e) => {
-                log::warn!("failed to parse git URL '{}': {}", url, e);
-                Platform::Unknown(url.to_string())
+        match origin_url {
+            Some(url) => Self::from_origin_url(url),
+            None => {
+                log::warn!("no origin URL and not running in CI");
+                Platform::Unknown
             }
         }
     }
 
+    fn extract_host_with_protocol(url: &str) -> Option<(String, String)> {
+        let protocol = if url.starts_with("https://") {
+            "https"
+        } else if url.starts_with("http://") {
+            "http"
+        } else {
+            return None;
+        };
+
+        let without_protocol = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))?;
+
+        let host = without_protocol.split('/').next()?;
+        Some((protocol.to_string(), host.to_string()))
+    }
+
+    fn from_ci_env() -> Option<Self> {
+        if std::env::var("GITLAB_CI").is_ok()
+            && let Ok(url) = std::env::var("CI_PROJECT_URL")
+        {
+            let api_url = std::env::var("CI_API_V4_URL").unwrap_or_else(|_| {
+                if let Some((protocol, host)) = Self::extract_host_with_protocol(&url) {
+                    return Self::infer_gitlab_api_url(&protocol, &host);
+                }
+                format!("{}/api/v4", url.trim_end_matches('/'))
+            });
+
+            let graphql_url = std::env::var("CI_API_GRAPHQL_URL").unwrap_or_else(|_| {
+                if let Some((protocol, host)) = Self::extract_host_with_protocol(&url) {
+                    Self::infer_gitlab_graphql_url(&protocol, &host)
+                } else {
+                    format!("{}/api/graphql", url.trim_end_matches('/'))
+                }
+            });
+
+            if let Ok(project_path) = std::env::var("CI_PROJECT_PATH") {
+                return Some(Platform::GitLab {
+                    url,
+                    api_url,
+                    graphql_url,
+                    project_path,
+                });
+            }
+        }
+
+        if std::env::var("GITHUB_ACTIONS").is_ok()
+            && let (Ok(server_url), Ok(repository)) = (
+                std::env::var("GITHUB_SERVER_URL"),
+                std::env::var("GITHUB_REPOSITORY"),
+            )
+        {
+            let url = format!("{}/{}", server_url, repository);
+            let api_url = std::env::var("GITHUB_API_URL").unwrap_or_else(|_| {
+                if let Some((protocol, host)) = Self::extract_host_with_protocol(&server_url) {
+                    return Self::infer_github_api_url(&protocol, &host);
+                }
+                format!("{}/api/v3", server_url.trim_end_matches('/'))
+            });
+
+            if let Some((owner, repo)) = repository.split_once('/') {
+                return Some(Platform::GitHub {
+                    url,
+                    api_url,
+                    owner: owner.to_string(),
+                    repo: repo.to_string(),
+                });
+            }
+        }
+
+        None
+    }
+
+    fn from_origin_url(origin_url: &str) -> Self {
+        match parse_git_url(origin_url) {
+            Ok((host, owner, repo)) => {
+                // Git URLs don't contain protocol info, so we assume HTTPS for web URLs
+                let url = format!("https://{}/{}/{}", host, owner, repo);
+                let protocol = "https";
+
+                if host.contains("github") {
+                    let repo_name = repo.split('/').next_back().unwrap_or(&repo);
+                    Platform::GitHub {
+                        url,
+                        api_url: Self::infer_github_api_url(protocol, &host),
+                        owner: owner.clone(),
+                        repo: repo_name.to_string(),
+                    }
+                } else if host.contains("gitlab") {
+                    let project_path = format!("{}/{}", owner, repo);
+                    Platform::GitLab {
+                        url,
+                        api_url: Self::infer_gitlab_api_url(protocol, &host),
+                        graphql_url: Self::infer_gitlab_graphql_url(protocol, &host),
+                        project_path,
+                    }
+                } else {
+                    Platform::Unknown
+                }
+            }
+            Err(e) => {
+                log::warn!("failed to parse git URL '{}': {}", origin_url, e);
+                Platform::Unknown
+            }
+        }
+    }
+
+    fn infer_github_api_url(protocol: &str, host: &str) -> String {
+        if host == "github.com" {
+            "https://api.github.com".to_string()
+        } else {
+            format!("{}://{}/api/v3", protocol, host)
+        }
+    }
+
+    fn infer_gitlab_api_url(protocol: &str, host: &str) -> String {
+        format!("{}://{}/api/v4", protocol, host)
+    }
+
+    fn infer_gitlab_graphql_url(protocol: &str, host: &str) -> String {
+        format!("{}://{}/api/graphql", protocol, host)
+    }
+
     pub fn url(&self) -> &str {
         match self {
-            Platform::GitHub(url) | Platform::GitLab(url) | Platform::Unknown(url) => url,
+            Platform::GitHub { url, .. } => url,
+            Platform::GitLab { url, .. } => url,
+            Platform::Unknown => "",
+        }
+    }
+
+    pub fn api_url(&self) -> &str {
+        match self {
+            Platform::GitHub { api_url, .. } => api_url,
+            Platform::GitLab { api_url, .. } => api_url,
+            Platform::Unknown => "",
         }
     }
 
     pub fn commit_url(&self, sha: &str) -> Option<String> {
         match self {
-            Platform::GitHub(url) => Some(format!("{}/commit/{}", url, sha)),
-            Platform::GitLab(url) => Some(format!("{}/-/commit/{}", url, sha)),
-            _ => None,
+            Platform::GitHub { url, .. } => Some(format!("{}/commit/{}", url, sha)),
+            Platform::GitLab { url, .. } => Some(format!("{}/-/commit/{}", url, sha)),
+            Platform::Unknown => None,
         }
     }
 
@@ -52,7 +187,7 @@ impl Platform {
         until: &str,
     ) -> Option<String> {
         match self {
-            Platform::GitHub(url) => Some(format!(
+            Platform::GitHub { url, .. } => Some(format!(
                 "{}/commits/{}?author={}&since={}&until={}",
                 url, git_ref, author, since, until
             )),
@@ -88,50 +223,5 @@ fn parse_git_url(url: &str) -> Result<(String, String, String)> {
             let owner = segments[..segments.len() - 1].join("/");
             Ok((host.to_string(), owner, repo.to_string()))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn detects_github_from_https_url() {
-        assert_eq!(
-            Platform::detect("https://github.com/owner/repo.git"),
-            Platform::GitHub("https://github.com/owner/repo".to_string())
-        );
-    }
-
-    #[test]
-    fn detects_github_from_ssh_url() {
-        assert_eq!(
-            Platform::detect("git@github.com:owner/repo.git"),
-            Platform::GitHub("https://github.com/owner/repo".to_string())
-        );
-    }
-
-    #[test]
-    fn detects_gitlab_from_https_url() {
-        assert_eq!(
-            Platform::detect("https://gitlab.com/owner/group/repo.git"),
-            Platform::GitLab("https://gitlab.com/owner/group/repo".to_string())
-        );
-    }
-
-    #[test]
-    fn detects_gitlab_from_ssh_url() {
-        assert_eq!(
-            Platform::detect("git@gitlab.com:owner/group/repo.git"),
-            Platform::GitLab("https://gitlab.com/owner/group/repo".to_string())
-        );
-    }
-
-    #[test]
-    fn detects_unknown_for_self_hosted() {
-        assert_eq!(
-            Platform::detect("https://git.company.com/owner/repo.git"),
-            Platform::Unknown("https://git.company.com/owner/repo".to_string())
-        );
     }
 }

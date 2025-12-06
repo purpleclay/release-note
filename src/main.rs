@@ -68,20 +68,15 @@ fn main() -> Result<()> {
     let repo = GitRepo::open(&args.path)?;
     let mut history = repo.history(args.from.clone(), args.to.clone())?;
 
-    if let Some(url) = repo.origin_url()
-        && let Ok(Some(mut resolver)) = contributor::ContributorResolver::from_url(url)
-    {
-        resolver.resolve_contributors(&mut history);
-    }
-
     let git_ref = args.from.clone().map(Ok).unwrap_or_else(|| {
         repo.current_ref()
             .context("failed to determine current reference")
     })?;
-    let platform = repo
-        .origin_url()
-        .map(Platform::detect)
-        .unwrap_or_else(|| Platform::Unknown(String::new()));
+    let platform = Platform::detect(repo.origin_url());
+
+    if let Ok(Some(mut resolver)) = contributor::ContributorResolver::new(&platform) {
+        resolver.resolve_contributors(&mut history);
+    }
 
     let categorized = CommitAnalyzer::analyze(&history);
     log::info!("");

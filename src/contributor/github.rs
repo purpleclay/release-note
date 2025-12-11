@@ -18,18 +18,15 @@ impl GitHubResolver {
                 owner,
                 repo,
                 api_url,
+                token,
                 ..
-            } => {
-                let github_token = std::env::var("GITHUB_TOKEN").ok();
-
-                Ok(Self {
-                    cache: HashMap::new(),
-                    github_token,
-                    repo_owner: owner.clone(),
-                    repo_name: repo.clone(),
-                    api_url: api_url.clone(),
-                })
-            }
+            } => Ok(Self {
+                cache: HashMap::new(),
+                github_token: token.clone(),
+                repo_owner: owner.clone(),
+                repo_name: repo.clone(),
+                api_url: api_url.clone(),
+            }),
             _ => anyhow::bail!("GitHubResolver requires a GitHub platform"),
         }
     }
@@ -179,6 +176,7 @@ mod tests {
             api_url: api_url.to_string(),
             owner: REPO_OWNER.to_string(),
             repo: REPO_NAME.to_string(),
+            token: None,
         }
     }
 

@@ -7,28 +7,74 @@ pub enum Platform {
         api_url: String,
         owner: String,
         repo: String,
+        token: Option<String>,
     },
     GitLab {
         url: String,
         api_url: String,
         graphql_url: String,
         project_path: String,
+        token: Option<String>,
     },
     Unknown,
 }
 
 impl Platform {
     pub fn detect(origin_url: Option<&str>) -> Self {
-        if let Some(platform) = Self::from_ci_env() {
-            return platform;
-        }
-
-        match origin_url {
-            Some(url) => Self::from_origin_url(url),
-            None => {
-                log::warn!("no origin URL and not running in CI");
-                Platform::Unknown
+        let platform = if let Some(platform) = Self::from_ci_env() {
+            platform
+        } else {
+            match origin_url {
+                Some(url) => Self::from_origin_url(url),
+                None => {
+                    log::warn!("no origin URL and not running in CI");
+                    return Platform::Unknown;
+                }
             }
+        };
+
+        match platform {
+            Platform::GitHub {
+                url,
+                api_url,
+                owner,
+                repo,
+                ..
+            } => {
+                let token = std::env::var("GITHUB_TOKEN").ok();
+                if token.is_none() {
+                    log::warn!("no GITHUB_TOKEN found; API requests may be rate limited");
+                }
+                Platform::GitHub {
+                    url,
+                    api_url,
+                    owner,
+                    repo,
+                    token,
+                }
+            }
+            Platform::GitLab {
+                url,
+                api_url,
+                graphql_url,
+                project_path,
+                ..
+            } => {
+                let token = std::env::var("GITLAB_TOKEN").ok();
+                if token.is_none() {
+                    log::warn!(
+                        "no GITLAB_TOKEN found; contributor resolution requires a token with 'read_user' scope"
+                    );
+                }
+                Platform::GitLab {
+                    url,
+                    api_url,
+                    graphql_url,
+                    project_path,
+                    token,
+                }
+            }
+            Platform::Unknown => Platform::Unknown,
         }
     }
 
@@ -74,6 +120,7 @@ impl Platform {
                     api_url,
                     graphql_url,
                     project_path,
+                    token: None,
                 });
             }
         }
@@ -98,6 +145,7 @@ impl Platform {
                     api_url,
                     owner: owner.to_string(),
                     repo: repo.to_string(),
+                    token: None,
                 });
             }
         }
@@ -119,6 +167,7 @@ impl Platform {
                         api_url: Self::infer_github_api_url(protocol, &host),
                         owner: owner.clone(),
                         repo: repo_name.to_string(),
+                        token: None,
                     }
                 } else if host.contains("gitlab") {
                     let project_path = format!("{}/{}", owner, repo);
@@ -127,6 +176,7 @@ impl Platform {
                         api_url: Self::infer_gitlab_api_url(protocol, &host),
                         graphql_url: Self::infer_gitlab_graphql_url(protocol, &host),
                         project_path,
+                        token: None,
                     }
                 } else {
                     Platform::Unknown

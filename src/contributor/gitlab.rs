@@ -18,18 +18,15 @@ impl GitLabResolver {
                 project_path,
                 graphql_url,
                 api_url,
+                token,
                 ..
-            } => {
-                let gitlab_token = std::env::var("GITLAB_TOKEN").ok();
-
-                Ok(Self {
-                    cache: HashMap::new(),
-                    gitlab_token,
-                    project_path: project_path.clone(),
-                    graphql_url: graphql_url.clone(),
-                    rest_api_url: api_url.clone(),
-                })
-            }
+            } => Ok(Self {
+                cache: HashMap::new(),
+                gitlab_token: token.clone(),
+                project_path: project_path.clone(),
+                graphql_url: graphql_url.clone(),
+                rest_api_url: api_url.clone(),
+            }),
             _ => anyhow::bail!("GitLabResolver requires a GitLab platform"),
         }
     }
@@ -282,6 +279,7 @@ mod tests {
             api_url: api_url.to_string(),
             graphql_url: graphql_url.to_string(),
             project_path: project_path.to_string(),
+            token: None,
         }
     }
 

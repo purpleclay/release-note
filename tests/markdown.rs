@@ -108,6 +108,7 @@ fn displays_contributors_with_github_commit_links() {
         api_url: "https://api.github.com".to_string(),
         owner: "shakespeare".to_string(),
         repo: "globe-theatre".to_string(),
+        token: None,
     };
 
     let categorized = CategorizedCommits {
@@ -155,6 +156,7 @@ fn displays_contributors_without_links_for_gitlab() {
         api_url: "https://gitlab.com/api/v4".to_string(),
         graphql_url: "https://gitlab.com/api/graphql".to_string(),
         project_path: "shakespeare/globe-theatre".to_string(),
+        token: None,
     };
 
     let categorized = CategorizedCommits {

@@ -14,11 +14,13 @@ impl EnvVars {
             "GITHUB_SERVER_URL",
             "GITHUB_API_URL",
             "GITHUB_REPOSITORY",
+            "GITHUB_TOKEN",
             "GITLAB_CI",
             "CI_PROJECT_URL",
             "CI_API_V4_URL",
             "CI_API_GRAPHQL_URL",
             "CI_PROJECT_PATH",
+            "GITLAB_TOKEN",
         ];
 
         unsafe {
@@ -64,6 +66,7 @@ fn detects_github_from_https_url() {
             api_url: "https://api.github.com".to_string(),
             owner: "owner".to_string(),
             repo: "repo".to_string(),
+            token: None,
         }
     );
 }
@@ -79,6 +82,7 @@ fn detects_github_from_ssh_url() {
             api_url: "https://api.github.com".to_string(),
             owner: "owner".to_string(),
             repo: "repo".to_string(),
+            token: None,
         }
     );
 }
@@ -94,6 +98,7 @@ fn detects_gitlab_from_https_url() {
             api_url: "https://gitlab.com/api/v4".to_string(),
             graphql_url: "https://gitlab.com/api/graphql".to_string(),
             project_path: "owner/group/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -109,6 +114,7 @@ fn detects_gitlab_from_ssh_url() {
             api_url: "https://gitlab.com/api/v4".to_string(),
             graphql_url: "https://gitlab.com/api/graphql".to_string(),
             project_path: "owner/group/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -124,6 +130,7 @@ fn detects_github_enterprise_from_https_url() {
             api_url: "https://github.company.com/api/v3".to_string(),
             owner: "owner".to_string(),
             repo: "repo".to_string(),
+            token: None,
         }
     );
 }
@@ -139,6 +146,7 @@ fn detects_self_hosted_gitlab_from_https_url() {
             api_url: "https://gitlab.company.com/api/v4".to_string(),
             graphql_url: "https://gitlab.company.com/api/graphql".to_string(),
             project_path: "owner/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -175,6 +183,7 @@ fn detects_github_from_actions_env() {
             api_url: "https://api.github.com".to_string(),
             owner: "owner".to_string(),
             repo: "repo".to_string(),
+            token: None,
         }
     );
 }
@@ -194,6 +203,7 @@ fn detects_github_enterprise_from_actions_env() {
             api_url: "https://github.company.com/api/v3".to_string(),
             owner: "owner".to_string(),
             repo: "repo".to_string(),
+            token: None,
         }
     );
 }
@@ -214,6 +224,7 @@ fn detects_github_with_custom_api_url() {
             api_url: "https://api.github.company.com".to_string(),
             owner: "owner".to_string(),
             repo: "repo".to_string(),
+            token: None,
         }
     );
 }
@@ -233,6 +244,7 @@ fn detects_gitlab_from_ci_env() {
             api_url: "https://gitlab.com/api/v4".to_string(),
             graphql_url: "https://gitlab.com/api/graphql".to_string(),
             project_path: "owner/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -255,6 +267,7 @@ fn detects_gitlab_with_nested_groups() {
             api_url: "https://gitlab.com/api/v4".to_string(),
             graphql_url: "https://gitlab.com/api/graphql".to_string(),
             project_path: "owner/group/subgroup/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -274,6 +287,7 @@ fn detects_self_hosted_gitlab_from_ci_env() {
             api_url: "https://gitlab.company.com/api/v4".to_string(),
             graphql_url: "https://gitlab.company.com/api/graphql".to_string(),
             project_path: "owner/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -298,6 +312,7 @@ fn detects_gitlab_with_custom_api_urls() {
             api_url: "https://api.gitlab.company.com/v4".to_string(),
             graphql_url: "https://api.gitlab.company.com/graphql".to_string(),
             project_path: "owner/repo".to_string(),
+            token: None,
         }
     );
 }
@@ -317,6 +332,49 @@ fn ci_detection_takes_precedence_over_url() {
             api_url: "https://api.github.com".to_string(),
             owner: "ci-owner".to_string(),
             repo: "ci-repo".to_string(),
+            token: None,
+        }
+    );
+}
+
+#[test]
+fn detects_github_token_from_env() {
+    let _env = EnvVars::set(&[
+        ("GITHUB_ACTIONS", "true"),
+        ("GITHUB_SERVER_URL", "https://github.com"),
+        ("GITHUB_REPOSITORY", "owner/repo"),
+        ("GITHUB_TOKEN", "ghp_test_token_123"),
+    ]);
+
+    assert_eq!(
+        Platform::detect(None),
+        Platform::GitHub {
+            url: "https://github.com/owner/repo".to_string(),
+            api_url: "https://api.github.com".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            token: Some("ghp_test_token_123".to_string()),
+        }
+    );
+}
+
+#[test]
+fn detects_gitlab_token_from_env() {
+    let _env = EnvVars::set(&[
+        ("GITLAB_CI", "true"),
+        ("CI_PROJECT_URL", "https://gitlab.com/owner/repo"),
+        ("CI_PROJECT_PATH", "owner/repo"),
+        ("GITLAB_TOKEN", "glpat_test_token_456"),
+    ]);
+
+    assert_eq!(
+        Platform::detect(None),
+        Platform::GitLab {
+            url: "https://gitlab.com/owner/repo".to_string(),
+            api_url: "https://gitlab.com/api/v4".to_string(),
+            graphql_url: "https://gitlab.com/api/graphql".to_string(),
+            project_path: "owner/repo".to_string(),
+            token: Some("glpat_test_token_456".to_string()),
         }
     );
 }

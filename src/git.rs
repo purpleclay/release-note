@@ -13,9 +13,6 @@ use crate::contributor::Contributor;
 
 #[derive(Error, Debug)]
 pub enum GitRepoError {
-    #[error("repository is in a detached HEAD state with incomplete history")]
-    DetachedHead,
-
     #[error("repository is a shallow clone with incomplete history")]
     ShallowClone,
 
@@ -319,13 +316,6 @@ impl GitRepo {
 
         if repo.is_shallow() {
             return Err(GitRepoError::ShallowClone.into());
-        }
-
-        {
-            let head = repo.head()?;
-            if !head.is_branch() && !head.is_tag() {
-                return Err(GitRepoError::DetachedHead.into());
-            }
         }
 
         let canonical_abs_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());

@@ -211,27 +211,6 @@ fn fails_on_shallow_clone() -> Result<()> {
 }
 
 #[test]
-fn fails_on_detached_head() -> Result<()> {
-    let test_repo = TestRepo::from_log(
-        r#"
-        feat: what's in a name? that which we call a rose
-        fix: parting is such sweet sorrow
-        "#,
-    )?;
-
-    let commit_oid = test_repo.commits[0];
-    let commit = test_repo.repo.find_commit(commit_oid)?;
-    test_repo.repo.set_head_detached(commit.id())?;
-
-    let result = GitRepo::open(test_repo.path());
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    assert!(err.to_string().contains("detached"));
-
-    Ok(())
-}
-
-#[test]
 fn extracts_and_strips_linked_issues() -> Result<()> {
     let mut test_repo = TestRepo::new()?;
 

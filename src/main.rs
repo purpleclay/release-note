@@ -7,6 +7,7 @@ use release_note::analyzer::CommitAnalyzer;
 use release_note::contributor;
 use release_note::git::GitRepo;
 use release_note::markdown;
+use release_note::template::TemplateResolver;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -65,6 +66,8 @@ fn main() -> Result<()> {
             .init();
     }
 
+    let template = TemplateResolver::new(args.path.clone()).resolve()?;
+
     let repo = GitRepo::open(&args.path)?;
     let mut history = repo.history(args.from.clone(), args.to.clone())?;
 
@@ -88,7 +91,7 @@ fn main() -> Result<()> {
 
     println!(
         "{}",
-        markdown::render_history(&categorized, &platform, &git_ref, release_date)?
+        markdown::render_history(&categorized, &platform, &git_ref, release_date, &template)?
     );
     Ok(())
 }

@@ -8,114 +8,6 @@ use regex::Regex;
 use std::collections::HashMap;
 use tera::Value;
 
-pub const TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
-{%- if commit.contributors %} ({{ commit.contributors | mention | join(sep=", ") }}){% endif -%}
-{%- endmacro commit_contributors -%}
-
-{%- macro contributor_link(contributor) -%}
-{%- set since = contributor.first_commit_timestamp | date(format="%Y-%m-%d") -%}
-{%- set until = contributor.last_commit_timestamp | date(format="%Y-%m-%d") -%}
-{%- set url = contributor_commits_url(author=contributor.username, since=since, until=until) -%}
-{%- if url -%}
-[**`{{ contributor.count }}`**]({{ url }}) commit{% if contributor.count != 1 %}s{% endif %}
-{%- else -%}
-{{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %}
-{%- endif -%}
-{%- endmacro contributor_link -%}
-
-## {{ git_ref }} - {{ release_date | date(format="%B %d, %Y") }}
-
-{%- set stats = [] -%}
-{%- if breaking -%}
-  {%- set breaking_count = breaking | length -%}
-  {%- if breaking_count > 0 -%}
-    {%- if breaking_count == 1 -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking change") -%}
-    {%- else -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking changes") -%}
-    {%- endif -%}
-  {%- endif -%}
-{%- endif -%}
-{%- if features -%}
-  {%- set features_count = features | length -%}
-  {%- if features_count > 0 -%}
-    {%- if features_count == 1 -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ features_count ~ "`**](#new-features) new feature") -%}
-    {%- else -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ features_count ~ "`**](#new-features) new features") -%}
-    {%- endif -%}
-  {%- endif -%}
-{%- endif -%}
-{%- if fixes -%}
-  {%- set fixes_count = fixes | length -%}
-  {%- if fixes_count > 0 -%}
-    {%- if fixes_count == 1 -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixed") -%}
-    {%- else -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixes") -%}
-    {%- endif -%}
-  {%- endif -%}
-{%- endif -%}
-{%- if stats | length > 0 %}
-
-{{ stats | join(sep=" • ") }}
-{% endif %}
-{%- if contributors %}
-## Contributors
-{%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
-- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor) }})
-{%- endfor %}
-{% endif %}
-{%- if breaking %}
-## Breaking Changes
-{%- for commit in breaking %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
-{%- if commit.body %}
-
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
-{%- endif %}
-{%- endfor %}
-
-{%- endif %}
-{%- if features %}
-## New Features
-{%- for commit in features %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
-{%- if commit.body %}
-
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
-{%- endif %}
-{%- endfor %}
-
-{%- endif %}
-{%- if fixes %}
-## Bug Fixes
-{%- for commit in fixes %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
-{%- if commit.body %}
-
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
-{%- endif %}
-{%- endfor %}
-
-{%- endif %}
-{%- if dependencies %}
-{%- set filtered_deps = dependencies | prefix(exclude="chore") %}
-{%- if filtered_deps %}
-## Dependency Updates
-{%- for commit in filtered_deps %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
-{%- if commit.body %}
-
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
-{%- endif %}
-{%- endfor %}
-
-{%- endif %}
-{%- endif %}
-
-*Generated with [release-note](https://github.com/purpleclay/release-note)*"#;
-
 static NUMBERED_LIST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+\.\s").unwrap());
 static TABLE_SEPARATOR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\|[\s\-:|]+\|$").unwrap());
 
@@ -371,13 +263,14 @@ pub fn render_history(
     platform: &Platform,
     git_ref: &str,
     release_date: i64,
+    template: &str,
 ) -> Result<String> {
     if categorized.by_category.is_empty() {
         return Ok(String::new());
     }
 
     let mut tera = tera::Tera::default();
-    tera.add_raw_template("main", TEMPLATE)
+    tera.add_raw_template("main", template)
         .context("failed to parse template")?;
 
     tera.register_filter("unwrap", unwrap_filter);

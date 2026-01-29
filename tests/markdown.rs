@@ -4,6 +4,7 @@ use commit::CommitBuilder;
 use release_note::analyzer::{CategorizedCommits, CommitCategory, ContributorSummary};
 use release_note::markdown;
 use release_note::platform::Platform;
+use release_note::template::DEFAULT_TEMPLATE;
 use std::collections::HashMap;
 
 // Fixed timestamp for tests: November 27, 2025 00:00:00 UTC
@@ -55,9 +56,14 @@ fn generates_release_note_from_multiple_categories() {
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -115,8 +121,14 @@ fn displays_contributors_with_github_commit_links() {
         by_category,
         contributors,
     };
-    let result =
-        markdown::render_history(&categorized, &platform, "v1.0.0", TEST_RELEASE_DATE).unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &platform,
+        "v1.0.0",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -163,8 +175,14 @@ fn displays_contributors_without_links_for_gitlab() {
         by_category,
         contributors,
     };
-    let result =
-        markdown::render_history(&categorized, &platform, "v1.0.0", TEST_RELEASE_DATE).unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &platform,
+        "v1.0.0",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -196,9 +214,14 @@ the attribute to awe and majesty.",
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -228,9 +251,14 @@ That is the last scene of all, that ends this strange eventful history.",
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -256,9 +284,14 @@ fn unwraps_numbered_lists_to_single_lines() {
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -287,9 +320,14 @@ These lines must maintain their integrity as written by the immortal bard.",
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -315,9 +353,14 @@ This soliloquy explores the fundamental nature of human existence and mortality.
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -361,9 +404,14 @@ Additional context on Elizabethan staging conventions is essential for authentic
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -375,9 +423,14 @@ fn generates_no_release_note_when_no_commits() {
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -415,9 +468,14 @@ fn excludes_git_trailers() {
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -469,9 +527,14 @@ fn displays_multiple_contributors() {
         by_category,
         contributors,
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -515,9 +578,14 @@ fn filters_bot_contributors() {
         by_category,
         contributors,
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }
@@ -554,9 +622,14 @@ Shakespeare so masterfully employed.",
         by_category,
         contributors: Vec::new(),
     };
-    let result =
-        markdown::render_history(&categorized, &Platform::Unknown, "HEAD", TEST_RELEASE_DATE)
-            .unwrap();
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
 
     insta::assert_snapshot!(result);
 }

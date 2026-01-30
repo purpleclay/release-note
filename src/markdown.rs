@@ -291,14 +291,35 @@ pub fn render_history(
     if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {
         context.insert("breaking", breaking);
     }
+    if let Some(chore) = categorized.by_category.get(&CommitCategory::Chore) {
+        context.insert("chore", chore);
+    }
+    if let Some(ci) = categorized.by_category.get(&CommitCategory::CI) {
+        context.insert("ci", ci);
+    }
+    if let Some(dependencies) = categorized.by_category.get(&CommitCategory::Dependencies) {
+        context.insert("dependencies", dependencies);
+    }
+    if let Some(docs) = categorized.by_category.get(&CommitCategory::Documentation) {
+        context.insert("docs", docs);
+    }
     if let Some(features) = categorized.by_category.get(&CommitCategory::Feature) {
         context.insert("features", features);
     }
     if let Some(fixes) = categorized.by_category.get(&CommitCategory::Fix) {
         context.insert("fixes", fixes);
     }
-    if let Some(dependencies) = categorized.by_category.get(&CommitCategory::Dependencies) {
-        context.insert("dependencies", dependencies);
+    if let Some(other) = categorized.by_category.get(&CommitCategory::Other) {
+        context.insert("other", other);
+    }
+    if let Some(perf) = categorized.by_category.get(&CommitCategory::Performance) {
+        context.insert("perf", perf);
+    }
+    if let Some(refactor) = categorized.by_category.get(&CommitCategory::Refactor) {
+        context.insert("refactor", refactor);
+    }
+    if let Some(test) = categorized.by_category.get(&CommitCategory::Test) {
+        context.insert("test", test);
     }
 
     let rendered = tera

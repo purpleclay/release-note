@@ -45,6 +45,16 @@ fn generates_release_note_from_multiple_categories() {
     );
 
     by_category.insert(
+        CommitCategory::Performance,
+        vec![
+            CommitBuilder::new("perf: brevity is the soul of wit").build(),
+            CommitBuilder::new("perf: swift as a shadow, short as any dream")
+                .with_body("So quick bright things come to confusion.")
+                .build(),
+        ],
+    );
+
+    by_category.insert(
         CommitCategory::Dependencies,
         vec![
             CommitBuilder::new("chore(deps): all that glisters is not gold").build(),

@@ -92,6 +92,17 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endfor %}
 
 {%- endif %}
+{%- if perf %}
+## Performance Improvements
+{%- for commit in perf %}
+- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+{%- if commit.body %}
+
+{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
+{%- endif %}
+{%- endfor %}
+
+{%- endif %}
 {%- if dependencies %}
 {%- set filtered_deps = dependencies | prefix(exclude="chore") %}
 {%- if filtered_deps %}

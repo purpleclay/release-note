@@ -77,6 +77,7 @@ impl CommitBuilder {
             username: username.to_string(),
             avatar_url: format!("https://github.com/{}.png", username),
             is_bot: false,
+            is_ai: false,
         });
         self
     }
@@ -86,6 +87,7 @@ impl CommitBuilder {
             username: username.to_string(),
             avatar_url: format!("https://github.com/{}.png", username),
             is_bot: true,
+            is_ai: false,
         });
         self
     }
@@ -97,6 +99,7 @@ impl CommitBuilder {
                 username: s.to_string(),
                 avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
                 is_bot: false,
+                is_ai: false,
             })
             .collect();
         self

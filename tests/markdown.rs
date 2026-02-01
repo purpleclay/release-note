@@ -106,6 +106,7 @@ fn displays_contributors_with_github_commit_links() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 2,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1748390400,
             last_commit_timestamp: 1748476800,
         },
@@ -114,6 +115,7 @@ fn displays_contributors_with_github_commit_links() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1748390400,
             last_commit_timestamp: 1748390400,
         },
@@ -159,6 +161,7 @@ fn displays_contributors_without_links_for_gitlab() {
                 .to_string(),
             count: 3,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1748390400,
             last_commit_timestamp: 1748476800,
         },
@@ -168,6 +171,7 @@ fn displays_contributors_without_links_for_gitlab() {
                 .to_string(),
             count: 1,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1748390400,
             last_commit_timestamp: 1748390400,
         },
@@ -512,6 +516,7 @@ fn displays_multiple_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 2,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1564567890,
             last_commit_timestamp: 1564567891,
         },
@@ -520,6 +525,7 @@ fn displays_multiple_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1564567890,
             last_commit_timestamp: 1564567890,
         },
@@ -528,6 +534,7 @@ fn displays_multiple_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1564567890,
             last_commit_timestamp: 1564567890,
         },
@@ -571,6 +578,7 @@ fn filters_bot_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: false,
+            is_ai: false,
             first_commit_timestamp: 1564567890,
             last_commit_timestamp: 1564567890,
         },
@@ -579,6 +587,7 @@ fn filters_bot_contributors() {
             avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
             count: 1,
             is_bot: true,
+            is_ai: false,
             first_commit_timestamp: 1564567890,
             last_commit_timestamp: 1564567890,
         },
@@ -592,6 +601,69 @@ fn filters_bot_contributors() {
         &categorized,
         &Platform::Unknown,
         "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn ai_contributors_have_no_commit_links() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: the course of true love never did run smooth")
+                .with_contributor("shakespeare")
+                .with_timestamp(1748390400)
+                .build(),
+            CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
+                .with_contributor("claude")
+                .with_timestamp(1748476800)
+                .build(),
+        ],
+    );
+
+    let contributors = vec![
+        ContributorSummary {
+            username: "shakespeare".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/2651292?v=4".to_string(),
+            count: 1,
+            is_bot: false,
+            is_ai: false,
+            first_commit_timestamp: 1748390400,
+            last_commit_timestamp: 1748390400,
+        },
+        ContributorSummary {
+            username: "claude".to_string(),
+            avatar_url: "https://www.gravatar.com/avatar/cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026?d=retro".to_string(),
+            count: 1,
+            is_bot: false,
+            is_ai: true,
+            first_commit_timestamp: 1748476800,
+            last_commit_timestamp: 1748476800,
+        },
+    ];
+
+    let platform = Platform::GitHub {
+        url: "https://github.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://api.github.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        token: None,
+    };
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors,
+    };
+    let result = markdown::render_history(
+        &categorized,
+        &platform,
+        "v1.0.0",
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )

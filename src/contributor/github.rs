@@ -134,8 +134,22 @@ impl PlatformResolver for GitHubResolver {
             return cached.clone();
         }
 
-        let username = Self::resolve_ai_contributor(email)
-            .or_else(|| Self::extract_username_from_noreply(email))
+        if let Some(username) = Self::resolve_ai_contributor(email) {
+            let contributor = Contributor {
+                username: username.clone(),
+                avatar_url: Self::generate_gravatar_url(email),
+                is_bot: false,
+                is_ai: true,
+            };
+
+            log::info!("resolved AI contributor {} for email: {}", username, email);
+
+            self.cache
+                .insert(email.to_string(), Some(contributor.clone()));
+            return Some(contributor);
+        }
+
+        let username = Self::extract_username_from_noreply(email)
             .or_else(|| self.query_commit_api(commit_hash));
 
         let contributor = username.map(|username| {
@@ -154,6 +168,7 @@ impl PlatformResolver for GitHubResolver {
                 username,
                 avatar_url,
                 is_bot,
+                is_ai: false,
             }
         });
 
@@ -227,6 +242,7 @@ mod tests {
                 username: "hamlet[bot]".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: true,
+                is_ai: false,
             })
         );
     }
@@ -276,6 +292,7 @@ mod tests {
             username: "ophelia".to_string(),
             avatar_url: AVATAR_URL.to_string(),
             is_bot: false,
+            is_ai: false,
         });
         assert_eq!(contributor1, expected);
         assert_eq!(contributor2, expected);
@@ -348,17 +365,19 @@ mod tests {
                 username: "prospero".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: false,
+                is_ai: false,
             })
         );
     }
 
     #[tokio::test]
-    async fn resolves_ai_contributor_without_commit_api_call() {
-        use wiremock::matchers::{method, path, path_regex};
+    async fn resolves_ai_contributor_without_api_calls() {
+        use wiremock::matchers::{method, path_regex};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
+        // AI contributors should not trigger commit API calls
         Mock::given(method("GET"))
             .and(path_regex(format!(
                 r"^/repos/{}/{}/commits/",
@@ -369,11 +388,11 @@ mod tests {
             .mount(&mock_server)
             .await;
 
+        // AI contributors should not trigger user API calls
         Mock::given(method("GET"))
-            .and(path("/users/claude"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "avatar_url": AVATAR_URL
-            })))
+            .and(path_regex(r"^/users/"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
             .mount(&mock_server)
             .await;
 
@@ -390,8 +409,9 @@ mod tests {
             contributor,
             Some(Contributor {
                 username: "claude".to_string(),
-                avatar_url: AVATAR_URL.to_string(),
+                avatar_url: "https://www.gravatar.com/avatar/cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026?d=retro".to_string(),
                 is_bot: false,
+                is_ai: true,
             })
         );
     }
@@ -436,6 +456,7 @@ mod tests {
                 username: "hamlet".to_string(),
                 avatar_url: "https://www.gravatar.com/avatar/7d6b35201428278c124e8bb39b932896790646965aec6df4b8673f0bc850d029?d=retro".to_string(),
                 is_bot: false,
+                is_ai: false,
             })
         );
     }

@@ -15,6 +15,7 @@ pub struct Contributor {
     pub username: String,
     pub avatar_url: String,
     pub is_bot: bool,
+    pub is_ai: bool,
 }
 
 pub trait PlatformResolver {

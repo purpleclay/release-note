@@ -1,0 +1,17 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## v1.0.0 - November 27, 2025
+
+[**`2`**](#new-features) new features
+
+## Contributors
+- <img src="https://avatars.githubusercontent.com/u/2651292?v=4&size=20" align="center">&nbsp;&nbsp;@shakespeare ([**`1`**](https://github.com/shakespeare/globe-theatre/commits/v1.0.0?author=shakespeare&since=2025-05-28&until=2025-05-28) commit)
+- <img src="https://www.gravatar.com/avatar/cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026?d=retro&size=20" align="center">&nbsp;&nbsp;@claude (**`1`** commit)
+
+## New Features
+- [**`a86272b`**](https://github.com/shakespeare/globe-theatre/commit/a86272be496b592fa86272be496b592fa86272be) the course of true love never did run smooth (@shakespeare)
+- [**`c82cb95`**](https://github.com/shakespeare/globe-theatre/commit/c82cb9580ca797b8c82cb9580ca797b8c82cb958) some Cupid kills with arrows, some with traps (@claude)
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

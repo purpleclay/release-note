@@ -237,8 +237,22 @@ impl PlatformResolver for GitLabResolver {
             return cached.clone();
         }
 
-        let username = Self::resolve_ai_contributor(email)
-            .or_else(|| Self::extract_username_from_noreply(email))
+        if let Some(username) = Self::resolve_ai_contributor(email) {
+            let contributor = Contributor {
+                username: username.clone(),
+                avatar_url: Self::generate_gravatar_url(email),
+                is_bot: false,
+                is_ai: true,
+            };
+
+            log::info!("resolved AI contributor {} for email: {}", username, email);
+
+            self.cache
+                .insert(email.to_string(), Some(contributor.clone()));
+            return Some(contributor);
+        }
+
+        let username = Self::extract_username_from_noreply(email)
             .or_else(|| self.query_commit_graphql(commit_hash));
 
         let contributor = username.map(|username| {
@@ -257,6 +271,7 @@ impl PlatformResolver for GitLabResolver {
                 username,
                 avatar_url,
                 is_bot,
+                is_ai: false,
             }
         });
 
@@ -371,6 +386,7 @@ mod tests {
                 username: "hamlet".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: false,
+                is_ai: false,
             })
         );
     }
@@ -431,44 +447,22 @@ mod tests {
                 username: "ophelia".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: false,
+                is_ai: false,
             })
         );
     }
 
     #[tokio::test]
     async fn resolves_ai_contributor_without_any_api_call() {
-        use wiremock::matchers::{method, path};
+        use wiremock::matchers::any;
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
-        Mock::given(method("POST"))
-            .and(path("/api/graphql"))
-            .respond_with(ResponseTemplate::new(200))
+        // This mock should NEVER be called - AI contributors are resolved locally
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(500))
             .expect(0)
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v4/users"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!([{
-                    "id": 99999,
-                    "username": "claude",
-                    "avatar_url": AVATAR_URL
-                }])),
-            )
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/api/v4/users/99999"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "id": 99999,
-                "username": "claude",
-                "avatar_url": AVATAR_URL,
-                "bot": false
-            })))
             .mount(&mock_server)
             .await;
 
@@ -489,8 +483,9 @@ mod tests {
             contributor,
             Some(Contributor {
                 username: "claude".to_string(),
-                avatar_url: AVATAR_URL.to_string(),
+                avatar_url: "https://www.gravatar.com/avatar/cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026?d=retro".to_string(),
                 is_bot: false,
+                is_ai: true,
             })
         );
     }
@@ -565,6 +560,7 @@ mod tests {
             username: "othello".to_string(),
             avatar_url: AVATAR_URL.to_string(),
             is_bot: false,
+            is_ai: false,
         });
         assert_eq!(contributor1, expected);
         assert_eq!(contributor2, expected);
@@ -658,6 +654,7 @@ mod tests {
                 username: "puck-bot".to_string(),
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: true,
+                is_ai: false,
             })
         );
     }
@@ -745,6 +742,7 @@ mod tests {
                 username: "hamlet".to_string(),
                 avatar_url: "https://www.gravatar.com/avatar/7d6b35201428278c124e8bb39b932896790646965aec6df4b8673f0bc850d029?d=retro".to_string(),
                 is_bot: false,
+                is_ai: false,
             })
         );
     }

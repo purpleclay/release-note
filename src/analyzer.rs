@@ -44,6 +44,7 @@ pub struct ContributorSummary {
     pub avatar_url: String,
     pub count: usize,
     pub is_bot: bool,
+    pub is_ai: bool,
     pub first_commit_timestamp: i64,
     pub last_commit_timestamp: i64,
 }
@@ -164,6 +165,7 @@ impl CommitAnalyzer {
                         avatar_url: contributor.avatar_url.clone(),
                         count: 1,
                         is_bot: contributor.is_bot,
+                        is_ai: contributor.is_ai,
                         first_commit_timestamp: commit.timestamp,
                         last_commit_timestamp: commit.timestamp,
                     });

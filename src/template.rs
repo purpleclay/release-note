@@ -6,13 +6,17 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endmacro commit_contributors -%}
 
 {%- macro contributor_link(contributor) -%}
+{%- if contributor.is_ai -%}
+**`{{ contributor.count }}`** commit{% if contributor.count != 1 %}s{% endif %}
+{%- else -%}
 {%- set since = contributor.first_commit_timestamp | date(format="%Y-%m-%d") -%}
 {%- set until = contributor.last_commit_timestamp | date(format="%Y-%m-%d") -%}
 {%- set url = contributor_commits_url(author=contributor.username, since=since, until=until) -%}
 {%- if url -%}
 [**`{{ contributor.count }}`**]({{ url }}) commit{% if contributor.count != 1 %}s{% endif %}
 {%- else -%}
-{{ contributor.count }} commit{% if contributor.count != 1 %}s{% endif %}
+**`{{ contributor.count }}`** commit{% if contributor.count != 1 %}s{% endif %}
+{%- endif -%}
 {%- endif -%}
 {%- endmacro contributor_link -%}
 

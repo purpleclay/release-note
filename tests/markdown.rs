@@ -639,7 +639,7 @@ fn ai_contributors_have_no_commit_links() {
         },
         ContributorSummary {
             username: "claude".to_string(),
-            avatar_url: "https://www.gravatar.com/avatar/cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026?d=retro".to_string(),
+            avatar_url: "https://avatars.githubusercontent.com/u/81847?v=4".to_string(),
             count: 1,
             is_bot: false,
             is_ai: true,

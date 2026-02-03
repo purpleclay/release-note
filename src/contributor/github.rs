@@ -134,22 +134,10 @@ impl PlatformResolver for GitHubResolver {
             return cached.clone();
         }
 
-        if let Some(username) = Self::resolve_ai_contributor(email) {
-            let contributor = Contributor {
-                username: username.clone(),
-                avatar_url: Self::generate_gravatar_url(email),
-                is_bot: false,
-                is_ai: true,
-            };
+        let is_ai = Self::resolve_ai_contributor(email).is_some();
 
-            log::info!("resolved AI contributor {} for email: {}", username, email);
-
-            self.cache
-                .insert(email.to_string(), Some(contributor.clone()));
-            return Some(contributor);
-        }
-
-        let username = Self::extract_username_from_noreply(email)
+        let username = Self::resolve_ai_contributor(email)
+            .or_else(|| Self::extract_username_from_noreply(email))
             .or_else(|| self.query_commit_api(commit_hash));
 
         let contributor = username.map(|username| {
@@ -158,17 +146,18 @@ impl PlatformResolver for GitHubResolver {
                 .unwrap_or_else(|| (Self::generate_gravatar_url(email), false));
 
             log::info!(
-                "resolved contributor {} for email: {} (bot: {})",
+                "resolved contributor {} for email: {} (bot: {}, ai: {})",
                 username,
                 email,
-                is_bot
+                is_bot,
+                is_ai
             );
 
             Contributor {
                 username,
                 avatar_url,
                 is_bot,
-                is_ai: false,
+                is_ai,
             }
         });
 
@@ -371,13 +360,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resolves_ai_contributor_without_api_calls() {
-        use wiremock::matchers::{method, path_regex};
+    async fn resolves_ai_contributor_with_user_api_lookup() {
+        use wiremock::matchers::{method, path, path_regex};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
-        // AI contributors should not trigger commit API calls
+        // AI contributors should not trigger commit API calls (username is known)
         Mock::given(method("GET"))
             .and(path_regex(format!(
                 r"^/repos/{}/{}/commits/",
@@ -388,11 +377,13 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // AI contributors should not trigger user API calls
+        // AI contributors should trigger user API calls to fetch avatar
         Mock::given(method("GET"))
-            .and(path_regex(r"^/users/"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(0)
+            .and(path("/users/claude"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "avatar_url": AVATAR_URL
+            })))
+            .expect(1)
             .mount(&mock_server)
             .await;
 
@@ -409,7 +400,7 @@ mod tests {
             contributor,
             Some(Contributor {
                 username: "claude".to_string(),
-                avatar_url: "https://www.gravatar.com/avatar/cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026?d=retro".to_string(),
+                avatar_url: AVATAR_URL.to_string(),
                 is_bot: false,
                 is_ai: true,
             })

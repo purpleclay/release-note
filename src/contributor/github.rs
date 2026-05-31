@@ -40,40 +40,38 @@ impl GitHubResolver {
     }
 
     fn query_user_api(&self, username: &str) -> Option<(String, bool)> {
-        let client = reqwest::blocking::Client::new();
         let url = format!("{}/users/{}", self.api_url, urlencoding::encode(username));
 
-        let mut request = client
-            .get(&url)
+        let mut request = ureq::get(&url)
             .header(
                 "User-Agent",
-                format!("release-note/{}", env!("CARGO_PKG_VERSION")),
+                &format!("release-note/{}", env!("CARGO_PKG_VERSION")),
             )
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28");
 
         if let Some(token) = &self.github_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", &format!("Bearer {}", token));
         }
 
-        match request.send() {
+        match request.call() {
             Ok(resp) => {
-                if resp.status().is_success() {
-                    if let Ok(json) = resp.json::<serde_json::Value>()
-                        && let Some(avatar_url) =
-                            json.pointer("/avatar_url").and_then(|v| v.as_str())
-                    {
-                        let is_bot = json
-                            .pointer("/type")
-                            .and_then(|v| v.as_str())
-                            .map(|t| t.eq_ignore_ascii_case("Bot"))
-                            .unwrap_or(false);
+                if let Ok(json) = resp.into_body().read_json::<serde_json::Value>()
+                    && let Some(avatar_url) =
+                        json.pointer("/avatar_url").and_then(|v| v.as_str())
+                {
+                    let is_bot = json
+                        .pointer("/type")
+                        .and_then(|v| v.as_str())
+                        .map(|t| t.eq_ignore_ascii_case("Bot"))
+                        .unwrap_or(false);
 
-                        return Some((avatar_url.to_string(), is_bot));
-                    }
-                } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                    log::debug!("user {} not found on GitHub", username);
+                    return Some((avatar_url.to_string(), is_bot));
                 }
+                None
+            }
+            Err(ureq::Error::StatusCode(404)) => {
+                log::debug!("user {} not found on GitHub", username);
                 None
             }
             Err(e) => {
@@ -84,40 +82,38 @@ impl GitHubResolver {
     }
 
     fn query_commit_api(&self, commit_hash: &str) -> Option<String> {
-        let client = reqwest::blocking::Client::new();
         let url = format!(
             "{}/repos/{}/{}/commits/{}",
             self.api_url, self.repo_owner, self.repo_name, commit_hash
         );
 
-        let mut request = client
-            .get(&url)
+        let mut request = ureq::get(&url)
             .header(
                 "User-Agent",
-                format!("release-note/{}", env!("CARGO_PKG_VERSION")),
+                &format!("release-note/{}", env!("CARGO_PKG_VERSION")),
             )
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28");
 
         if let Some(token) = &self.github_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", &format!("Bearer {}", token));
         }
 
-        let response = request.send();
-        match response {
+        match request.call() {
             Ok(resp) => {
-                if resp.status().is_success() {
-                    if let Ok(json) = resp.json::<serde_json::Value>()
-                        && let Some(login) = json.pointer("/author/login").and_then(|v| v.as_str())
-                    {
-                        return Some(login.to_string());
-                    }
-                } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                    log::debug!(
-                        "commit {} not found in project on GitHub",
-                        &commit_hash[..7.min(commit_hash.len())]
-                    );
+                if let Ok(json) = resp.into_body().read_json::<serde_json::Value>()
+                    && let Some(login) =
+                        json.pointer("/author/login").and_then(|v| v.as_str())
+                {
+                    return Some(login.to_string());
                 }
+                None
+            }
+            Err(ureq::Error::StatusCode(404)) => {
+                log::debug!(
+                    "commit {} not found in project on GitHub",
+                    &commit_hash[..7.min(commit_hash.len())]
+                );
                 None
             }
             Err(e) => {

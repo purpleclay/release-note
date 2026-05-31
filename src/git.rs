@@ -279,7 +279,7 @@ impl GitRepo {
         let head_oid = head.peel_to_commit()?.id();
 
         if let Ok(tag_names) = self.repo.tag_names(None) {
-            for tag_name in tag_names.iter().flatten() {
+            for tag_name in tag_names.iter().flatten().flatten() {
                 let tag_ref = format!("refs/tags/{}", tag_name);
                 if let Ok(reference) = self.repo.find_reference(&tag_ref)
                     && let Ok(commit) = reference.peel_to_commit()
@@ -337,7 +337,7 @@ impl GitRepo {
         let origin_url = repo
             .find_remote("origin")
             .ok()
-            .and_then(|remote| remote.url().map(|s| s.to_string()));
+            .and_then(|remote| remote.url().ok().map(|s| s.to_string()));
 
         Ok(GitRepo {
             repo,
@@ -356,7 +356,7 @@ impl GitRepo {
         let mut tags = Vec::new();
         let tag_names = repo.tag_names(None)?;
 
-        for tag_name in tag_names.iter().flatten() {
+        for tag_name in tag_names.iter().flatten().flatten() {
             if !Self::is_semver_tag(tag_name) {
                 continue;
             }

@@ -69,7 +69,11 @@ pub trait PlatformResolver {
         let normalized_email = email.trim().to_lowercase();
         let mut hasher = Sha256::new();
         hasher.update(normalized_email.as_bytes());
-        let hash = format!("{:x}", hasher.finalize());
+        let hash: String = hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
 
         format!("https://www.gravatar.com/avatar/{}?d=retro", hash)
     }

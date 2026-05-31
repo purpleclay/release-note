@@ -2,8 +2,10 @@ use super::{Contributor, PlatformResolver};
 use crate::platform::Platform;
 use anyhow::Result;
 use std::collections::HashMap;
+use std::time::Duration;
 
 pub struct GitLabResolver {
+    agent: ureq::Agent,
     cache: HashMap<String, Option<Contributor>>,
     gitlab_token: Option<String>,
     project_path: String,
@@ -21,6 +23,7 @@ impl GitLabResolver {
                 token,
                 ..
             } => Ok(Self {
+                agent: Self::build_agent(),
                 cache: HashMap::new(),
                 gitlab_token: token.clone(),
                 project_path: project_path.clone(),
@@ -29,6 +32,14 @@ impl GitLabResolver {
             }),
             _ => anyhow::bail!("GitLabResolver requires a GitLab platform"),
         }
+    }
+
+    fn build_agent() -> ureq::Agent {
+        let config = ureq::Agent::config_builder()
+            .timeout_connect(Some(Duration::from_secs(10)))
+            .timeout_per_call(Some(Duration::from_secs(30)))
+            .build();
+        ureq::Agent::new_with_config(config)
     }
 
     fn extract_username_from_noreply(email: &str) -> Option<String> {
@@ -53,7 +64,6 @@ impl GitLabResolver {
     }
 
     fn query_commit_graphql(&self, commit_hash: &str) -> Option<String> {
-        let client = reqwest::blocking::Client::new();
         let query = r#"
             query GetCommitAuthor($projectPath: ID!, $ref: String!) {
                 project(fullPath: $projectPath) {
@@ -78,50 +88,55 @@ impl GitLabResolver {
             "variables": variables,
         });
 
-        let mut request = client
-            .post(&self.graphql_url)
-            .header(
-                "User-Agent",
-                format!("release-note/{}", env!("CARGO_PKG_VERSION")),
-            )
-            .header("Content-Type", "application/json")
-            .json(&body);
+        let mut request = self.agent.post(&self.graphql_url).header(
+            "User-Agent",
+            &format!("release-note/{}", env!("CARGO_PKG_VERSION")),
+        );
 
         if let Some(token) = &self.gitlab_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", &format!("Bearer {}", token));
         }
 
-        match request.send() {
+        match request.send_json(body) {
             Ok(resp) => {
-                if resp.status().is_success() {
-                    if let Ok(json) = resp.json::<serde_json::Value>() {
-                        if let Some(username) = json
-                            .pointer("/data/project/repository/commit/author/username")
-                            .and_then(|v| v.as_str())
-                        {
-                            return Some(username.to_string());
-                        }
-
-                        if json
-                            .pointer("/data/project/repository/commit/author")
-                            .is_some_and(|v| v.is_null())
-                        {
-                            log::debug!(
-                                "commit {} author email not linked to GitLab account",
-                                &commit_hash[..7.min(commit_hash.len())]
-                            );
-                            return None;
-                        }
-
-                        if let Some(errors) = json.pointer("/errors") {
-                            log::debug!("GraphQL errors for commit {}: {}", commit_hash, errors);
-                        }
+                if let Ok(json) = resp.into_body().read_json::<serde_json::Value>() {
+                    if let Some(username) = json
+                        .pointer("/data/project/repository/commit/author/username")
+                        .and_then(|v| v.as_str())
+                    {
+                        return Some(username.to_string());
                     }
-                } else {
+
+                    if json
+                        .pointer("/data/project/repository/commit/author")
+                        .is_some_and(|v| v.is_null())
+                    {
+                        log::debug!(
+                            "commit {} author email not linked to GitLab account",
+                            &commit_hash[..7.min(commit_hash.len())]
+                        );
+                        return None;
+                    }
+
+                    if let Some(errors) = json.pointer("/errors") {
+                        log::warn!("GraphQL errors for commit {}: {}", commit_hash, errors);
+                    }
+                }
+                None
+            }
+            Err(ureq::Error::StatusCode(status)) => {
+                let short_hash = &commit_hash[..7.min(commit_hash.len())];
+                if status == 404 {
                     log::debug!(
                         "GraphQL query failed for commit {} with status: {}",
-                        &commit_hash[..7.min(commit_hash.len())],
-                        resp.status()
+                        short_hash,
+                        status
+                    );
+                } else {
+                    log::warn!(
+                        "GraphQL query failed for commit {} with status: {}",
+                        short_hash,
+                        status
                     );
                 }
                 None
@@ -134,39 +149,36 @@ impl GitLabResolver {
     }
 
     fn query_user_search(&self, username: &str) -> Option<u64> {
-        let client = reqwest::blocking::Client::new();
         let search_url = format!(
             "{}/users?username={}",
             self.rest_api_url,
             urlencoding::encode(username)
         );
 
-        let mut request = client.get(&search_url).header(
+        let mut request = self.agent.get(&search_url).header(
             "User-Agent",
-            format!("release-note/{}", env!("CARGO_PKG_VERSION")),
+            &format!("release-note/{}", env!("CARGO_PKG_VERSION")),
         );
 
         if let Some(token) = &self.gitlab_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", &format!("Bearer {}", token));
         }
 
-        match request.send() {
+        match request.call() {
             Ok(resp) => {
-                if resp.status().is_success() {
-                    if let Ok(json) = resp.json::<serde_json::Value>() {
-                        if let Some(user) = json.as_array().and_then(|arr| arr.first()) {
-                            return user.pointer("/id").and_then(|v| v.as_u64());
-                        } else {
-                            log::debug!("no users found for username {}", username);
-                        }
+                if let Ok(json) = resp.into_body().read_json::<serde_json::Value>() {
+                    if let Some(user) = json.as_array().and_then(|arr| arr.first()) {
+                        return user.pointer("/id").and_then(|v| v.as_u64());
                     } else {
-                        log::debug!("failed to parse user search response for {}", username);
+                        log::debug!("no users found for username {}", username);
                     }
-                } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                    log::debug!("user {} not found on GitLab", username);
                 } else {
-                    log::debug!("user search failed with status: {}", resp.status());
+                    log::debug!("failed to parse user search response for {}", username);
                 }
+                None
+            }
+            Err(ureq::Error::StatusCode(404)) => {
+                log::debug!("user {} not found on GitLab", username);
                 None
             }
             Err(e) => {
@@ -177,43 +189,43 @@ impl GitLabResolver {
     }
 
     fn query_user_details(&self, user_id: u64) -> Option<(String, bool)> {
-        let client = reqwest::blocking::Client::new();
         let details_url = format!("{}/users/{}", self.rest_api_url, user_id);
 
-        let mut request = client.get(&details_url).header(
+        let mut request = self.agent.get(&details_url).header(
             "User-Agent",
-            format!("release-note/{}", env!("CARGO_PKG_VERSION")),
+            &format!("release-note/{}", env!("CARGO_PKG_VERSION")),
         );
 
         if let Some(token) = &self.gitlab_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", &format!("Bearer {}", token));
         }
 
-        match request.send() {
+        match request.call() {
             Ok(resp) => {
-                if resp.status().is_success() {
-                    if let Ok(user) = resp.json::<serde_json::Value>() {
-                        let avatar_url = user
-                            .pointer("/avatar_url")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                if let Ok(user) = resp.into_body().read_json::<serde_json::Value>() {
+                    let avatar_url = user
+                        .pointer("/avatar_url")
+                        .and_then(|v| v.as_str())?
+                        .to_string();
 
-                        let is_bot = user
-                            .pointer("/bot")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
+                    let is_bot = user
+                        .pointer("/bot")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
 
-                        return Some((avatar_url, is_bot));
-                    }
-                } else if resp.status() == reqwest::StatusCode::FORBIDDEN {
-                    log::warn!(
-                        "authorization failed when querying user details for id {} (403 Forbidden)",
-                        user_id
-                    );
-                } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
-                    log::debug!("user details for id {} not found on GitLab", user_id);
+                    return Some((avatar_url, is_bot));
                 }
+                None
+            }
+            Err(ureq::Error::StatusCode(403)) => {
+                log::warn!(
+                    "authorization failed when querying user details for id {} (403 Forbidden)",
+                    user_id
+                );
+                None
+            }
+            Err(ureq::Error::StatusCode(404)) => {
+                log::debug!("user details for id {} not found on GitLab", user_id);
                 None
             }
             Err(e) => {

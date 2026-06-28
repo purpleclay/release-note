@@ -58,7 +58,13 @@ fn generates_release_note_from_multiple_categories() {
         CommitCategory::Dependencies,
         vec![
             CommitBuilder::new("chore(deps): all that glisters is not gold").build(),
-            CommitBuilder::new("fix(deps): the better part of valor is discretion").build(),
+            CommitBuilder::new("fix(deps): the better part of valor is discretion")
+                .with_contributor_bot("renovate[bot]")
+                .build(),
+            CommitBuilder::new("fix(deps): though this be madness, yet there is method in it")
+                .with_contributor_bot("renovate[bot]")
+                .with_contributor("shakespeare")
+                .build(),
         ],
     );
 
@@ -696,6 +702,35 @@ Each tragedy explores the downfall of a noble figure through their own \
 weaknesses, reflecting the Aristotelian concept of hamartia that \
 Shakespeare so masterfully employed.",
                 )
+                .build(),
+        ],
+    );
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn escapes_table_metacharacters_in_dependency_update_cell() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Dependencies,
+        vec![
+            CommitBuilder::new("fix(deps): bump foo | bar from 1.0.0 to 2.0.0")
+                .with_contributor_bot("renovate[bot]")
                 .build(),
         ],
     );

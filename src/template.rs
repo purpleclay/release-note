@@ -111,12 +111,11 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- set filtered_deps = dependencies | prefix(exclude="chore") %}
 {%- if filtered_deps %}
 ## Dependency Updates
-{%- for commit in filtered_deps %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
-{%- if commit.body %}
 
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
-{%- endif %}
+| Commit | Update | Contributors |
+|--------|--------|--------------|
+{%- for commit in filtered_deps %}
+| {{ commit_url(sha = commit.hash) }} | {{ commit.first_line | strip_conventional_prefix | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(sep=", ") }}{% endif %} |
 {%- endfor %}
 
 {%- endif %}

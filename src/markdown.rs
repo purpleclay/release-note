@@ -220,6 +220,14 @@ fn strip_conventional_prefix_filter(
     Ok(Value::String(stripped))
 }
 
+fn table_escape_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+    let text = value
+        .as_str()
+        .ok_or_else(|| tera::Error::msg("table_escape filter requires a string value"))?;
+
+    Ok(Value::String(text.replace('|', "\\|")))
+}
+
 fn register_platform_functions(tera: &mut tera::Tera, git_ref: &str, platform: &Platform) {
     let platform = platform.clone();
 
@@ -280,6 +288,7 @@ pub fn render_history(
         "strip_conventional_prefix",
         strip_conventional_prefix_filter,
     );
+    tera.register_filter("table_escape", table_escape_filter);
 
     register_platform_functions(&mut tera, git_ref, platform);
 

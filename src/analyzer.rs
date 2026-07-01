@@ -56,11 +56,10 @@ impl CommitAnalyzer {
         let mut by_category: HashMap<CommitCategory, Vec<Commit>> = HashMap::new();
 
         for commit in commits {
-            let category = Self::categorize(commit);
-            by_category
-                .entry(category)
-                .or_default()
-                .push(commit.clone());
+            let (category, scope) = Self::categorize(commit);
+            let mut c = commit.clone();
+            c.scope = scope;
+            by_category.entry(category).or_default().push(c);
         }
 
         log::info!("attempting to categorize commits");
@@ -81,21 +80,27 @@ impl CommitAnalyzer {
         }
     }
 
-    fn categorize(commit: &Commit) -> CommitCategory {
+    fn categorize(commit: &Commit) -> (CommitCategory, String) {
+        let parsed = Self::parse_conventional_commit(&commit.first_line);
+        let scope = parsed
+            .as_ref()
+            .and_then(|p| p.scope.clone())
+            .unwrap_or_default();
+
         if Self::has_breaking_footer(commit) {
-            return CommitCategory::Breaking;
+            return (CommitCategory::Breaking, scope);
         }
 
-        if let Some(parsed) = Self::parse_conventional_commit(&commit.first_line) {
+        if let Some(parsed) = parsed {
             if parsed.breaking {
-                return CommitCategory::Breaking;
+                return (CommitCategory::Breaking, scope);
             }
 
             if parsed.scope.as_deref() == Some("deps") {
-                return CommitCategory::Dependencies;
+                return (CommitCategory::Dependencies, scope);
             }
 
-            match parsed.commit_type.as_str() {
+            let category = match parsed.commit_type.as_str() {
                 "feat" => CommitCategory::Feature,
                 "fix" => CommitCategory::Fix,
                 "docs" => CommitCategory::Documentation,
@@ -105,9 +110,10 @@ impl CommitAnalyzer {
                 "chore" => CommitCategory::Chore,
                 "refactor" => CommitCategory::Refactor,
                 _ => CommitCategory::Other,
-            }
+            };
+            (category, scope)
         } else {
-            CommitCategory::Other
+            (CommitCategory::Other, scope)
         }
     }
 

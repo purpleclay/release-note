@@ -116,6 +116,7 @@ impl CommitBuilder {
             hash,
             first_line: self.first_line,
             body: self.body,
+            scope: String::new(),
             trailers: self.trailers,
             linked_issues: Vec::new(),
             author: self.author.unwrap_or("William Shakespeare".to_string()),

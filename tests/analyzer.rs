@@ -252,6 +252,24 @@ fn detects_breaking_change_when_parsed_as_trailer() {
 }
 
 #[test]
+fn populates_scope_from_conventional_commit() {
+    let commits = vec![
+        CommitBuilder::new("feat(api): something scoped").build(),
+        CommitBuilder::new("feat: something unscoped").build(),
+        CommitBuilder::new("not a conventional commit").build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    let features = result.by_category.get(&CommitCategory::Feature).unwrap();
+    assert_eq!(features[0].scope, "api");
+    assert_eq!(features[1].scope, "");
+
+    let other = result.by_category.get(&CommitCategory::Other).unwrap();
+    assert_eq!(other[0].scope, "");
+}
+
+#[test]
 fn detects_breaking_change_trailer_with_hyphen() {
     let commit = CommitBuilder::new("chore: all's well that ends well")
         .with_trailer("BREAKING-CHANGES", "the evil that men do lives after them")

@@ -252,6 +252,98 @@ fn detects_breaking_change_when_parsed_as_trailer() {
 }
 
 #[test]
+fn populates_type_from_conventional_commit() {
+    let commits = vec![
+        CommitBuilder::new("feat(api): something scoped").build(),
+        CommitBuilder::new("fix: a plain fix").build(),
+        CommitBuilder::new("not a conventional commit").build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    let features = result.by_category.get(&CommitCategory::Feature).unwrap();
+    assert_eq!(features[0].type_, "feat");
+
+    let fixes = result.by_category.get(&CommitCategory::Fix).unwrap();
+    assert_eq!(fixes[0].type_, "fix");
+
+    let other = result.by_category.get(&CommitCategory::Other).unwrap();
+    assert_eq!(other[0].type_, "");
+}
+
+#[test]
+fn sets_breaking_true_for_bang_commits() {
+    let commit = CommitBuilder::new("feat!: something breaking").build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert!(breaking[0].breaking);
+    assert_eq!(breaking[0].breaking_description, None);
+}
+
+#[test]
+fn sets_breaking_true_and_description_for_footer_commits() {
+    let commit = CommitBuilder::new("fix: the course of true love never did run smooth")
+        .with_body("BREAKING CHANGE: with mirth and laughter let old wrinkles come")
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert!(breaking[0].breaking);
+    assert_eq!(
+        breaking[0].breaking_description,
+        Some("with mirth and laughter let old wrinkles come".to_string())
+    );
+}
+
+#[test]
+fn sets_breaking_true_and_description_from_trailer() {
+    let commit = CommitBuilder::new("refactor: parting is such sweet sorrow")
+        .with_trailer("BREAKING-CHANGE", "shall I compare thee to a summer's day")
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert!(breaking[0].breaking);
+    assert_eq!(
+        breaking[0].breaking_description,
+        Some("shall I compare thee to a summer's day".to_string())
+    );
+}
+
+#[test]
+fn captures_multiline_breaking_description_from_body() {
+    let commit = CommitBuilder::new("fix: the course of true love never did run smooth")
+        .with_body(
+            "BREAKING CHANGE: with mirth and laughter let old wrinkles come\nand so the whirligig of time brings in his revenges",
+        )
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
+    assert_eq!(
+        breaking[0].breaking_description,
+        Some("with mirth and laughter let old wrinkles come\nand so the whirligig of time brings in his revenges".to_string())
+    );
+}
+
+#[test]
+fn non_breaking_commits_have_breaking_false() {
+    let commits = vec![
+        CommitBuilder::new("feat: a normal feature").build(),
+        CommitBuilder::new("not conventional").build(),
+    ];
+    let result = CommitAnalyzer::analyze(&commits);
+
+    for commits in result.by_category.values() {
+        for commit in commits {
+            assert!(!commit.breaking);
+            assert_eq!(commit.breaking_description, None);
+        }
+    }
+}
+
+#[test]
 fn populates_scope_from_conventional_commit() {
     let commits = vec![
         CommitBuilder::new("feat(api): something scoped").build(),

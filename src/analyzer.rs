@@ -11,10 +11,20 @@ static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
 static BREAKING_FOOTER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:").unwrap());
 
+static BREAKING_FOOTER_DESC: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:[ \t]*(?s:(.+))").unwrap());
+
 struct ConventionalCommit {
     commit_type: String,
     scope: Option<String>,
     breaking: bool,
+}
+
+struct CommitMeta {
+    scope: String,
+    type_: String,
+    breaking: bool,
+    breaking_description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
@@ -56,9 +66,12 @@ impl CommitAnalyzer {
         let mut by_category: HashMap<CommitCategory, Vec<Commit>> = HashMap::new();
 
         for commit in commits {
-            let (category, scope) = Self::categorize(commit);
+            let (category, meta) = Self::categorize(commit);
             let mut c = commit.clone();
-            c.scope = scope;
+            c.scope = meta.scope;
+            c.type_ = meta.type_;
+            c.breaking = meta.breaking;
+            c.breaking_description = meta.breaking_description;
             by_category.entry(category).or_default().push(c);
         }
 
@@ -80,24 +93,39 @@ impl CommitAnalyzer {
         }
     }
 
-    fn categorize(commit: &Commit) -> (CommitCategory, String) {
+    fn categorize(commit: &Commit) -> (CommitCategory, CommitMeta) {
         let parsed = Self::parse_conventional_commit(&commit.first_line);
         let scope = parsed
             .as_ref()
             .and_then(|p| p.scope.clone())
             .unwrap_or_default();
+        let type_ = parsed
+            .as_ref()
+            .map(|p| p.commit_type.clone())
+            .unwrap_or_default();
+        let breaking_bang = parsed.as_ref().map(|p| p.breaking).unwrap_or(false);
+        let has_footer = Self::has_breaking_footer(commit);
+        let breaking = breaking_bang || has_footer;
+        let breaking_description = if has_footer {
+            Self::extract_breaking_description(commit)
+        } else {
+            None
+        };
 
-        if Self::has_breaking_footer(commit) {
-            return (CommitCategory::Breaking, scope);
+        let meta = CommitMeta {
+            scope,
+            type_,
+            breaking,
+            breaking_description,
+        };
+
+        if breaking {
+            return (CommitCategory::Breaking, meta);
         }
 
-        if let Some(parsed) = parsed {
-            if parsed.breaking {
-                return (CommitCategory::Breaking, scope);
-            }
-
+        if let Some(ref parsed) = parsed {
             if parsed.scope.as_deref() == Some("deps") {
-                return (CommitCategory::Dependencies, scope);
+                return (CommitCategory::Dependencies, meta);
             }
 
             let category = match parsed.commit_type.as_str() {
@@ -111,10 +139,34 @@ impl CommitAnalyzer {
                 "refactor" => CommitCategory::Refactor,
                 _ => CommitCategory::Other,
             };
-            (category, scope)
+            (category, meta)
         } else {
-            (CommitCategory::Other, scope)
+            (CommitCategory::Other, meta)
         }
+    }
+
+    fn find_breaking_trailer(commit: &Commit) -> Option<&str> {
+        commit.trailers.iter().find_map(|trailer| {
+            if let crate::git::GitTrailer::Other { key, value } = trailer {
+                let normalized = key.to_uppercase().replace('-', " ");
+                if normalized == "BREAKING CHANGE" || normalized == "BREAKING CHANGES" {
+                    return Some(value.as_str());
+                }
+            }
+            None
+        })
+    }
+
+    fn extract_breaking_description(commit: &Commit) -> Option<String> {
+        if let Some(value) = Self::find_breaking_trailer(commit) {
+            return Some(value.to_string());
+        }
+        if let Some(body) = &commit.body
+            && let Some(caps) = BREAKING_FOOTER_DESC.captures(body)
+        {
+            return caps.get(1).map(|m| m.as_str().trim().to_string());
+        }
+        None
     }
 
     fn has_breaking_footer(commit: &Commit) -> bool {
@@ -123,17 +175,7 @@ impl CommitAnalyzer {
         {
             return true;
         }
-
-        for trailer in &commit.trailers {
-            if let crate::git::GitTrailer::Other { key, .. } = trailer {
-                let normalized = key.to_uppercase().replace('-', " ");
-                if normalized == "BREAKING CHANGE" || normalized == "BREAKING CHANGES" {
-                    return true;
-                }
-            }
-        }
-
-        false
+        Self::find_breaking_trailer(commit).is_some()
     }
 
     fn parse_conventional_commit(first_line: &str) -> Option<ConventionalCommit> {

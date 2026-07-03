@@ -108,17 +108,14 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 
 {%- endif %}
 {%- if dependencies %}
-{%- set filtered_deps = dependencies | prefix(exclude="chore") %}
-{%- if filtered_deps %}
 ## Dependency Updates
 
 | Commit | Update | Contributors |
 |--------|--------|--------------|
-{%- for commit in filtered_deps %}
+{%- for commit in dependencies %}
 | {{ commit_url(sha = commit.hash) }} | {{ commit.first_line | strip_conventional_prefix | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(sep=", ") }}{% endif %} |
 {%- endfor %}
 
-{%- endif %}
 {%- endif %}
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*"#;

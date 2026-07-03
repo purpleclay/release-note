@@ -1,0 +1,12 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## HEAD - November 27, 2025
+## Dependency Updates
+
+| Commit | Update | Contributors |
+|--------|--------|--------------|
+| **`9b7775b`** | bump serde to 1.0.200 | @renovate[bot] |
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

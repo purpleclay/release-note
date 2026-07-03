@@ -85,6 +85,32 @@ fn generates_release_note_from_multiple_categories() {
 }
 
 #[test]
+fn includes_chore_deps_commits_in_dependency_table() {
+    let mut by_category = HashMap::new();
+    by_category.insert(
+        CommitCategory::Dependencies,
+        vec![
+            CommitBuilder::new("chore(deps): bump serde to 1.0.200")
+                .with_contributor_bot("renovate[bot]")
+                .build(),
+        ],
+    );
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+    insta::assert_snapshot!(result);
+}
+
+#[test]
 fn displays_contributors_with_github_commit_links() {
     let mut by_category = HashMap::new();
 

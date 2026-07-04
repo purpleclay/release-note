@@ -16,6 +16,10 @@ fn is_table_line(line: &str) -> bool {
     (trimmed.starts_with('|') && trimmed.ends_with('|')) || TABLE_SEPARATOR.is_match(trimmed)
 }
 
+fn is_indented(line: &str) -> bool {
+    line.starts_with("    ") || line.starts_with('\t')
+}
+
 fn is_structured_content(para: &str) -> bool {
     para.lines().any(|line| {
         let trimmed = line.trim_start();
@@ -24,8 +28,7 @@ fn is_structured_content(para: &str) -> bool {
             || trimmed.starts_with("+ ")
             || trimmed.starts_with("> ")
             || trimmed.starts_with("```")
-            || trimmed.starts_with("    ")
-            || trimmed.starts_with('\t')
+            || is_indented(line)
             || NUMBERED_LIST.is_match(trimmed)
             || is_table_line(line)
     })
@@ -39,6 +42,7 @@ fn is_continuation_line(line: &str) -> bool {
         && !trimmed.starts_with("+ ")
         && !trimmed.starts_with("> ")
         && !trimmed.starts_with("```")
+        && !is_indented(line)
         && !NUMBERED_LIST.is_match(trimmed)
         && !is_table_line(line)
         && !trimmed.is_empty()
@@ -68,6 +72,15 @@ fn unwrap_structured_content(para: &str) -> String {
         }
 
         if is_table_line(line) {
+            if !current_item.is_empty() {
+                result.push(current_item.join(" "));
+                current_item.clear();
+            }
+            result.push(line.to_string());
+            continue;
+        }
+
+        if is_indented(line) {
             if !current_item.is_empty() {
                 result.push(current_item.join(" "));
                 current_item.clear();

@@ -1,0 +1,15 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## HEAD - November 27, 2025
+
+[**`1`**](#new-features) new feature
+
+## New Features
+- **`0f05c41`** add tab indented example
+
+  	HAMLET: To be, or not to be, that is the question.
+  	OPHELIA: Good my lord, how does your honour for this many a day?
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## HEAD - November 27, 2025
+
+[**`1`**](#new-features) new feature
+
+## New Features
+- **`47bb817`** document the soliloquy
+
+  The famous soliloquy in its original indented form:
+
+      HAMLET: To be, or not to be, that is the question.
+      OPHELIA: Good my lord, how does your honour for this many a day?
+
+  The lines above must be preserved exactly as written.
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

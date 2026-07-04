@@ -379,6 +379,100 @@ These lines must maintain their integrity as written by the immortal bard.",
 }
 
 #[test]
+fn preserves_indented_code_blocks() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![CommitBuilder::new("feat: add indented example")
+            .with_body(
+                "    HAMLET: To be, or not to be, that is the question.\n    OPHELIA: Good my lord, how does your honour for this many a day?",
+            )
+            .build()],
+    );
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn preserves_tab_indented_code_blocks() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![CommitBuilder::new("feat: add tab indented example")
+            .with_body(
+                "\tHAMLET: To be, or not to be, that is the question.\n\tOPHELIA: Good my lord, how does your honour for this many a day?",
+            )
+            .build()],
+    );
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn handles_mixed_prose_and_indented_code_block() {
+    let mut by_category = HashMap::new();
+
+    by_category.insert(
+        CommitCategory::Feature,
+        vec![
+            CommitBuilder::new("feat: document the soliloquy")
+                .with_body(
+                    "The famous soliloquy in its original indented form:
+
+    HAMLET: To be, or not to be, that is the question.
+    OPHELIA: Good my lord, how does your honour for this many a day?
+
+The lines above must be preserved exactly as written.",
+                )
+                .build(),
+        ],
+    );
+
+    let categorized = CategorizedCommits {
+        by_category,
+        contributors: Vec::new(),
+    };
+    let result = markdown::render_history(
+        &categorized,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
 fn preserves_block_quotes_as_is() {
     let mut by_category = HashMap::new();
 

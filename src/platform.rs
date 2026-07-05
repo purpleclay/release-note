@@ -20,12 +20,12 @@ pub enum Platform {
 }
 
 impl Platform {
-    pub fn detect(origin_url: Option<&str>) -> Self {
-        let platform = if let Some(platform) = Self::from_ci_env() {
-            platform
+    pub fn detect(origin_url: Option<&str>, trusted_hosts: &[String]) -> Self {
+        let (platform, from_ci) = if let Some(platform) = Self::from_ci_env() {
+            (platform, true)
         } else {
             match origin_url {
-                Some(url) => Self::from_origin_url(url),
+                Some(url) => (Self::from_origin_url(url), false),
                 None => {
                     log::warn!("no origin URL and not running in CI");
                     return Platform::Unknown;
@@ -41,10 +41,13 @@ impl Platform {
                 repo,
                 ..
             } => {
-                let token = std::env::var("GITHUB_TOKEN").ok();
-                if token.is_none() {
-                    log::warn!("no GITHUB_TOKEN found; API requests may be rate limited");
-                }
+                let token = Self::resolve_token(
+                    &url,
+                    from_ci,
+                    trusted_hosts,
+                    "GITHUB_TOKEN",
+                    "no GITHUB_TOKEN found; API requests may be rate limited",
+                );
                 Platform::GitHub {
                     url,
                     api_url,
@@ -60,12 +63,13 @@ impl Platform {
                 project_path,
                 ..
             } => {
-                let token = std::env::var("GITLAB_TOKEN").ok();
-                if token.is_none() {
-                    log::warn!(
-                        "no GITLAB_TOKEN found; contributor resolution requires a token with 'read_user' scope"
-                    );
-                }
+                let token = Self::resolve_token(
+                    &url,
+                    from_ci,
+                    trusted_hosts,
+                    "GITLAB_TOKEN",
+                    "no GITLAB_TOKEN found; contributor resolution requires a token with 'read_user' scope",
+                );
                 Platform::GitLab {
                     url,
                     api_url,
@@ -76,6 +80,25 @@ impl Platform {
             }
             Platform::Unknown => Platform::Unknown,
         }
+    }
+
+    fn resolve_token(
+        url: &str,
+        from_ci: bool,
+        trusted_hosts: &[String],
+        env_var: &str,
+        missing_token_warning: &str,
+    ) -> Option<String> {
+        let host = Self::extract_host_with_protocol(url)
+            .map(|(_, h)| h)
+            .unwrap_or_default();
+        load_trusted_token(
+            from_ci,
+            &host,
+            trusted_hosts,
+            env_var,
+            missing_token_warning,
+        )
     }
 
     fn extract_host_with_protocol(url: &str) -> Option<(String, String)> {
@@ -159,8 +182,12 @@ impl Platform {
                 // Git URLs don't contain protocol info, so we assume HTTPS for web URLs
                 let url = format!("https://{}/{}/{}", host, owner, repo);
                 let protocol = "https";
+                let host_lower = host.to_ascii_lowercase();
 
-                if host.contains("github") {
+                if host_lower == "github.com"
+                    || host_lower.ends_with(".github.com")
+                    || host_lower.starts_with("github.")
+                {
                     let repo_name = repo.split('/').next_back().unwrap_or(&repo);
                     Platform::GitHub {
                         url,
@@ -169,7 +196,7 @@ impl Platform {
                         repo: repo_name.to_string(),
                         token: None,
                     }
-                } else if host.contains("gitlab") {
+                } else if host_lower == "gitlab.com" || host_lower.starts_with("gitlab.") {
                     let project_path = format!("{}/{}", owner, repo);
                     Platform::GitLab {
                         url,
@@ -190,7 +217,8 @@ impl Platform {
     }
 
     fn infer_github_api_url(protocol: &str, host: &str) -> String {
-        if host == "github.com" {
+        let host_lower = host.to_ascii_lowercase();
+        if host_lower == "github.com" || host_lower.ends_with(".github.com") {
             "https://api.github.com".to_string()
         } else {
             format!("{}://{}/api/v3", protocol, host)
@@ -243,6 +271,35 @@ impl Platform {
             )),
             _ => None,
         }
+    }
+}
+
+fn is_trusted_host(host: &str, trusted_hosts: &[String]) -> bool {
+    let host = host.to_ascii_lowercase();
+    host == "github.com"
+        || host.ends_with(".github.com")
+        || host == "gitlab.com"
+        || trusted_hosts.iter().any(|h| h.to_ascii_lowercase() == host)
+}
+
+fn load_trusted_token(
+    from_ci: bool,
+    host: &str,
+    trusted_hosts: &[String],
+    env_var: &str,
+    missing_token_warning: &str,
+) -> Option<String> {
+    if from_ci || is_trusted_host(host, trusted_hosts) {
+        let token = std::env::var(env_var).ok();
+        if token.is_none() {
+            log::warn!("{}", missing_token_warning);
+        }
+        token
+    } else {
+        log::warn!(
+            "host '{host}' is not trusted; set RELEASE_NOTE_TRUSTED_HOST={host} to enable contributor resolution"
+        );
+        None
     }
 }
 

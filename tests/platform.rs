@@ -21,6 +21,7 @@ impl EnvVars {
             "CI_API_GRAPHQL_URL",
             "CI_PROJECT_PATH",
             "GITLAB_TOKEN",
+            "RELEASE_NOTE_TRUSTED_HOST",
         ];
 
         unsafe {
@@ -60,7 +61,7 @@ fn detects_github_from_https_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("https://github.com/owner/repo.git")),
+        Platform::detect(Some("https://github.com/owner/repo.git"), &[]),
         Platform::GitHub {
             url: "https://github.com/owner/repo".to_string(),
             api_url: "https://api.github.com".to_string(),
@@ -76,7 +77,7 @@ fn detects_github_from_ssh_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("git@github.com:owner/repo.git")),
+        Platform::detect(Some("git@github.com:owner/repo.git"), &[]),
         Platform::GitHub {
             url: "https://github.com/owner/repo".to_string(),
             api_url: "https://api.github.com".to_string(),
@@ -92,7 +93,7 @@ fn detects_gitlab_from_https_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("https://gitlab.com/owner/group/repo.git")),
+        Platform::detect(Some("https://gitlab.com/owner/group/repo.git"), &[]),
         Platform::GitLab {
             url: "https://gitlab.com/owner/group/repo".to_string(),
             api_url: "https://gitlab.com/api/v4".to_string(),
@@ -108,7 +109,7 @@ fn detects_gitlab_from_ssh_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("git@gitlab.com:owner/group/repo.git")),
+        Platform::detect(Some("git@gitlab.com:owner/group/repo.git"), &[]),
         Platform::GitLab {
             url: "https://gitlab.com/owner/group/repo".to_string(),
             api_url: "https://gitlab.com/api/v4".to_string(),
@@ -124,7 +125,7 @@ fn detects_github_enterprise_from_https_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("https://github.company.com/owner/repo.git")),
+        Platform::detect(Some("https://github.company.com/owner/repo.git"), &[]),
         Platform::GitHub {
             url: "https://github.company.com/owner/repo".to_string(),
             api_url: "https://github.company.com/api/v3".to_string(),
@@ -140,7 +141,7 @@ fn detects_self_hosted_gitlab_from_https_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("https://gitlab.company.com/owner/repo.git")),
+        Platform::detect(Some("https://gitlab.company.com/owner/repo.git"), &[]),
         Platform::GitLab {
             url: "https://gitlab.company.com/owner/repo".to_string(),
             api_url: "https://gitlab.company.com/api/v4".to_string(),
@@ -156,7 +157,7 @@ fn detects_unknown_for_unrecognized_host() {
     let _clean_env = EnvVars::clear_ci_env();
 
     assert_eq!(
-        Platform::detect(Some("https://git.company.com/owner/repo.git")),
+        Platform::detect(Some("https://git.company.com/owner/repo.git"), &[]),
         Platform::Unknown
     );
 }
@@ -165,7 +166,7 @@ fn detects_unknown_for_unrecognized_host() {
 fn detects_unknown_when_no_origin_url() {
     let _clean_env = EnvVars::clear_ci_env();
 
-    assert_eq!(Platform::detect(None), Platform::Unknown);
+    assert_eq!(Platform::detect(None, &[]), Platform::Unknown);
 }
 
 #[test]
@@ -177,7 +178,7 @@ fn detects_github_from_actions_env() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitHub {
             url: "https://github.com/owner/repo".to_string(),
             api_url: "https://api.github.com".to_string(),
@@ -197,7 +198,7 @@ fn detects_github_enterprise_from_actions_env() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitHub {
             url: "https://github.company.com/owner/repo".to_string(),
             api_url: "https://github.company.com/api/v3".to_string(),
@@ -218,7 +219,7 @@ fn detects_github_with_custom_api_url() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitHub {
             url: "https://github.company.com/owner/repo".to_string(),
             api_url: "https://api.github.company.com".to_string(),
@@ -238,7 +239,7 @@ fn detects_gitlab_from_ci_env() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitLab {
             url: "https://gitlab.com/owner/repo".to_string(),
             api_url: "https://gitlab.com/api/v4".to_string(),
@@ -261,7 +262,7 @@ fn detects_gitlab_with_nested_groups() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitLab {
             url: "https://gitlab.com/owner/group/subgroup/repo".to_string(),
             api_url: "https://gitlab.com/api/v4".to_string(),
@@ -281,7 +282,7 @@ fn detects_self_hosted_gitlab_from_ci_env() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitLab {
             url: "https://gitlab.company.com/owner/repo".to_string(),
             api_url: "https://gitlab.company.com/api/v4".to_string(),
@@ -306,7 +307,7 @@ fn detects_gitlab_with_custom_api_urls() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitLab {
             url: "https://gitlab.company.com/owner/repo".to_string(),
             api_url: "https://api.gitlab.company.com/v4".to_string(),
@@ -326,7 +327,7 @@ fn ci_detection_takes_precedence_over_url() {
     ]);
 
     assert_eq!(
-        Platform::detect(Some("https://gitlab.com/url-owner/url-repo.git")),
+        Platform::detect(Some("https://gitlab.com/url-owner/url-repo.git"), &[]),
         Platform::GitHub {
             url: "https://github.com/ci-owner/ci-repo".to_string(),
             api_url: "https://api.github.com".to_string(),
@@ -347,7 +348,7 @@ fn detects_github_token_from_env() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitHub {
             url: "https://github.com/owner/repo".to_string(),
             api_url: "https://api.github.com".to_string(),
@@ -368,13 +369,144 @@ fn detects_gitlab_token_from_env() {
     ]);
 
     assert_eq!(
-        Platform::detect(None),
+        Platform::detect(None, &[]),
         Platform::GitLab {
             url: "https://gitlab.com/owner/repo".to_string(),
             api_url: "https://gitlab.com/api/v4".to_string(),
             graphql_url: "https://gitlab.com/api/graphql".to_string(),
             project_path: "owner/repo".to_string(),
             token: Some("glpat_test_token_456".to_string()),
+        }
+    );
+}
+
+#[test]
+fn withholds_token_for_lookalike_github_host() {
+    let _env = EnvVars::set(&[("GITHUB_TOKEN", "ghp_secret")]);
+
+    assert_eq!(
+        Platform::detect(Some("git@github.evil.com:owner/repo.git"), &[]),
+        Platform::GitHub {
+            url: "https://github.evil.com/owner/repo".to_string(),
+            api_url: "https://github.evil.com/api/v3".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            token: None,
+        }
+    );
+}
+
+#[test]
+fn withholds_token_for_notgithub_prefix_host() {
+    let _env = EnvVars::set(&[("GITHUB_TOKEN", "ghp_secret")]);
+
+    assert_eq!(
+        Platform::detect(Some("https://notgithub.attacker.com/owner/repo.git"), &[]),
+        Platform::Unknown
+    );
+}
+
+#[test]
+fn attaches_token_for_github_saas_subdomain() {
+    let _env = EnvVars::set(&[("GITHUB_TOKEN", "ghp_secret")]);
+
+    assert_eq!(
+        Platform::detect(Some("https://gist.github.com/owner/repo.git"), &[]),
+        Platform::GitHub {
+            url: "https://gist.github.com/owner/repo".to_string(),
+            api_url: "https://api.github.com".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            token: Some("ghp_secret".to_string()),
+        }
+    );
+}
+
+#[test]
+fn withholds_token_for_untrusted_self_hosted_github() {
+    let _env = EnvVars::set(&[("GITHUB_TOKEN", "ghp_secret")]);
+
+    assert_eq!(
+        Platform::detect(Some("https://github.company.com/owner/repo.git"), &[]),
+        Platform::GitHub {
+            url: "https://github.company.com/owner/repo".to_string(),
+            api_url: "https://github.company.com/api/v3".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            token: None,
+        }
+    );
+}
+
+#[test]
+fn withholds_token_for_untrusted_self_hosted_gitlab() {
+    let _env = EnvVars::set(&[("GITLAB_TOKEN", "glpat_secret")]);
+
+    assert_eq!(
+        Platform::detect(Some("https://gitlab.company.com/owner/repo.git"), &[]),
+        Platform::GitLab {
+            url: "https://gitlab.company.com/owner/repo".to_string(),
+            api_url: "https://gitlab.company.com/api/v4".to_string(),
+            graphql_url: "https://gitlab.company.com/api/graphql".to_string(),
+            project_path: "owner/repo".to_string(),
+            token: None,
+        }
+    );
+}
+
+#[test]
+fn attaches_token_for_trusted_self_hosted_github() {
+    let _env = EnvVars::set(&[("GITHUB_TOKEN", "ghp_secret")]);
+
+    assert_eq!(
+        Platform::detect(
+            Some("https://github.company.com/owner/repo.git"),
+            &["github.company.com".to_string()],
+        ),
+        Platform::GitHub {
+            url: "https://github.company.com/owner/repo".to_string(),
+            api_url: "https://github.company.com/api/v3".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            token: Some("ghp_secret".to_string()),
+        }
+    );
+}
+
+#[test]
+fn attaches_token_for_trusted_host_case_insensitively() {
+    let _env = EnvVars::set(&[("GITHUB_TOKEN", "ghp_secret")]);
+
+    assert_eq!(
+        Platform::detect(
+            Some("https://github.company.com/owner/repo.git"),
+            &["GitHub.Company.com".to_string()],
+        ),
+        Platform::GitHub {
+            url: "https://github.company.com/owner/repo".to_string(),
+            api_url: "https://github.company.com/api/v3".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            token: Some("ghp_secret".to_string()),
+        }
+    );
+}
+
+#[test]
+fn attaches_token_for_trusted_self_hosted_gitlab() {
+    let _env = EnvVars::set(&[("GITLAB_TOKEN", "glpat_secret")]);
+
+    assert_eq!(
+        Platform::detect(
+            Some("https://gitlab.mycorp.io/owner/repo.git"),
+            &["gitlab.mycorp.io".to_string()],
+        ),
+        Platform::GitLab {
+            url: "https://gitlab.mycorp.io/owner/repo".to_string(),
+            api_url: "https://gitlab.mycorp.io/api/v4".to_string(),
+            graphql_url: "https://gitlab.mycorp.io/api/graphql".to_string(),
+            project_path: "owner/repo".to_string(),
+            token: Some("glpat_secret".to_string()),
         }
     );
 }

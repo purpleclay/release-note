@@ -39,6 +39,17 @@ struct Args {
     #[arg(value_name = "DIR", long, default_value = ".", verbatim_doc_comment)]
     path: PathBuf,
 
+    /// Trust a host for token attachment (e.g. a self-hosted GitHub Enterprise or GitLab
+    /// instance). Can be repeated or comma-separated. Without this flag, tokens are only
+    /// sent to github.com, *.github.com, and gitlab.com.
+    #[arg(
+        long,
+        value_name = "HOST",
+        value_delimiter = ',',
+        env = "RELEASE_NOTE_TRUSTED_HOST"
+    )]
+    trusted_host: Vec<String>,
+
     /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
@@ -75,7 +86,7 @@ fn main() -> Result<()> {
         repo.current_ref()
             .context("failed to determine current reference")
     })?;
-    let platform = Platform::detect(repo.origin_url());
+    let platform = Platform::detect(repo.origin_url(), &args.trusted_host);
 
     if let Ok(Some(mut resolver)) = contributor::ContributorResolver::new(&platform) {
         resolver.resolve_contributors(&mut history);

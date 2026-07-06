@@ -44,7 +44,9 @@ impl GitLabResolver {
 
     fn extract_username_from_noreply(email: &str) -> Option<String> {
         if let Some(prefix) = email.strip_suffix("@users.noreply.gitlab.com") {
-            return prefix.split('-').nth(1).map(str::to_string);
+            return prefix
+                .split_once('-')
+                .map(|(_, username)| username.to_string());
         }
 
         if let Some(username) = email.strip_suffix("@noreply.gitlab.com") {
@@ -308,6 +310,32 @@ mod tests {
             project_path: project_path.to_string(),
             token: None,
         }
+    }
+
+    #[test]
+    fn extracts_username_from_users_noreply_email() {
+        assert_eq!(
+            GitLabResolver::extract_username_from_noreply(
+                "123456-ophelia@users.noreply.gitlab.com"
+            ),
+            Some("ophelia".to_string())
+        );
+    }
+
+    #[test]
+    fn extracts_hyphenated_username_from_users_noreply_email() {
+        assert_eq!(
+            GitLabResolver::extract_username_from_noreply("123-john-doe@users.noreply.gitlab.com"),
+            Some("john-doe".to_string())
+        );
+    }
+
+    #[test]
+    fn extracts_username_from_noreply_email() {
+        assert_eq!(
+            GitLabResolver::extract_username_from_noreply("ophelia@noreply.gitlab.com"),
+            Some("ophelia".to_string())
+        );
     }
 
     #[tokio::test]

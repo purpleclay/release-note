@@ -244,7 +244,7 @@ impl GitLabResolver {
 }
 
 impl PlatformResolver for GitLabResolver {
-    fn resolve(&mut self, commit_hash: &str, email: &str) -> Option<Contributor> {
+    fn resolve(&mut self, commit_hash: Option<&str>, email: &str) -> Option<Contributor> {
         log::info!("resolving contributor for email: {}", email);
 
         if let Some(cached) = self.cache.get(email) {
@@ -267,7 +267,7 @@ impl PlatformResolver for GitLabResolver {
         }
 
         let username = Self::extract_username_from_noreply(email)
-            .or_else(|| self.query_commit_graphql(commit_hash));
+            .or_else(|| commit_hash.and_then(|h| self.query_commit_graphql(h)));
 
         let contributor = username.map(|username| {
             let (avatar_url, is_bot) = self
@@ -289,7 +289,9 @@ impl PlatformResolver for GitLabResolver {
             }
         });
 
-        self.cache.insert(email.to_string(), contributor.clone());
+        if commit_hash.is_some() || contributor.is_some() {
+            self.cache.insert(email.to_string(), contributor.clone());
+        }
         contributor
     }
 }
@@ -415,7 +417,7 @@ mod tests {
         let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("a1b2c3d", "hamlet@globe-theatre.com")
+            resolver.resolve(Some("a1b2c3d"), "hamlet@globe-theatre.com")
         })
         .await
         .unwrap();
@@ -476,7 +478,7 @@ mod tests {
         let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("e4f5g6h", "123456-ophelia@users.noreply.gitlab.com")
+            resolver.resolve(Some("e4f5g6h"), "123456-ophelia@users.noreply.gitlab.com")
         })
         .await
         .unwrap();
@@ -514,7 +516,7 @@ mod tests {
         let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("i7j8k9l", "noreply@anthropic.com")
+            resolver.resolve(Some("i7j8k9l"), "noreply@anthropic.com")
         })
         .await
         .unwrap();
@@ -589,8 +591,8 @@ mod tests {
         let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let (contributor1, contributor2) = tokio::task::spawn_blocking(move || {
-            let contributor1 = resolver.resolve("m1n2o3p", "othello@globe-theatre.com");
-            let contributor2 = resolver.resolve("q4r5s6t", "othello@globe-theatre.com");
+            let contributor1 = resolver.resolve(Some("m1n2o3p"), "othello@globe-theatre.com");
+            let contributor2 = resolver.resolve(Some("q4r5s6t"), "othello@globe-theatre.com");
             (contributor1, contributor2)
         })
         .await
@@ -683,7 +685,7 @@ mod tests {
         let mut resolver = GitLabResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("u7v8w9x", "puck-bot@globe-theatre.com")
+            resolver.resolve(Some("u7v8w9x"), "puck-bot@globe-theatre.com")
         })
         .await
         .unwrap();
@@ -771,16 +773,136 @@ mod tests {
         );
         let mut resolver = GitLabResolver::new(&platform).unwrap();
 
-        let contributor =
-            tokio::task::spawn_blocking(move || resolver.resolve("a1b2c3d", "hamlet@denmark.dk"))
-                .await
-                .unwrap();
+        let contributor = tokio::task::spawn_blocking(move || {
+            resolver.resolve(Some("a1b2c3d"), "hamlet@denmark.dk")
+        })
+        .await
+        .unwrap();
 
         assert_eq!(
             contributor,
             Some(Contributor {
                 username: "hamlet".to_string(),
                 avatar_url: "https://www.gravatar.com/avatar/7d6b35201428278c124e8bb39b932896790646965aec6df4b8673f0bc850d029?d=retro".to_string(),
+                is_bot: false,
+                is_ai: false,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn coauthor_with_unresolvable_email_does_not_trigger_graphql() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/graphql"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
+        );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
+
+        let contributor =
+            tokio::task::spawn_blocking(move || resolver.resolve(None, "coauthor@example.com"))
+                .await
+                .unwrap();
+
+        assert_eq!(contributor, None);
+    }
+
+    #[tokio::test]
+    async fn coauthor_miss_does_not_poison_cache_for_primary_author() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        let query = r#"
+            query GetCommitAuthor($projectPath: ID!, $ref: String!) {
+                project(fullPath: $projectPath) {
+                    repository {
+                        commit(ref: $ref) {
+                            author {
+                                username
+                            }
+                        }
+                    }
+                }
+            }
+        "#;
+
+        Mock::given(method("POST"))
+            .and(path("/api/graphql"))
+            .and(body_json(serde_json::json!({
+                "query": GitLabResolver::normalize_graphql_query(query),
+                "variables": {
+                    "projectPath": PROJECT_PATH,
+                    "ref": "abc1234"
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "project": {
+                        "repository": {
+                            "commit": {
+                                "author": { "username": "horatio" }
+                            }
+                        }
+                    }
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "id": 99, "username": "horatio", "avatar_url": AVATAR_URL }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v4/users/99"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 99,
+                "username": "horatio",
+                "avatar_url": AVATAR_URL,
+                "bot": false
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let platform = create_test_platform(
+            PROJECT_PATH,
+            &format!("{}/api/v4", mock_server.uri()),
+            &format!("{}/api/graphql", mock_server.uri()),
+        );
+        let mut resolver = GitLabResolver::new(&platform).unwrap();
+
+        let contributor = tokio::task::spawn_blocking(move || {
+            // co-author resolution: should not cache a miss
+            let _ = resolver.resolve(None, "horatio@elsinore.dk");
+            // primary author resolution with same email: should hit GraphQL
+            resolver.resolve(Some("abc1234"), "horatio@elsinore.dk")
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "horatio".to_string(),
+                avatar_url: AVATAR_URL.to_string(),
                 is_bot: false,
                 is_ai: false,
             })

@@ -138,7 +138,7 @@ impl GitHubResolver {
 }
 
 impl PlatformResolver for GitHubResolver {
-    fn resolve(&mut self, commit_hash: &str, email: &str) -> Option<Contributor> {
+    fn resolve(&mut self, commit_hash: Option<&str>, email: &str) -> Option<Contributor> {
         if let Some(cached) = self.cache.get(email) {
             return cached.clone();
         }
@@ -147,7 +147,7 @@ impl PlatformResolver for GitHubResolver {
 
         let username = Self::resolve_ai_contributor(email)
             .or_else(|| Self::extract_username_from_noreply(email))
-            .or_else(|| self.query_commit_api(commit_hash));
+            .or_else(|| commit_hash.and_then(|h| self.query_commit_api(h)));
 
         let contributor = username.map(|username| {
             let (avatar_url, is_bot) = self
@@ -170,7 +170,9 @@ impl PlatformResolver for GitHubResolver {
             }
         });
 
-        self.cache.insert(email.to_string(), contributor.clone());
+        if commit_hash.is_some() || contributor.is_some() {
+            self.cache.insert(email.to_string(), contributor.clone());
+        }
         contributor
     }
 }
@@ -229,7 +231,7 @@ mod tests {
         let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("599e13c", "hamlet[bot]@globe-theatre.com")
+            resolver.resolve(Some("599e13c"), "hamlet[bot]@globe-theatre.com")
         })
         .await
         .unwrap();
@@ -279,8 +281,8 @@ mod tests {
         let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let (contributor1, contributor2) = tokio::task::spawn_blocking(move || {
-            let contributor1 = resolver.resolve("3a1d4ed", "ophelia@globe-theatre.com");
-            let contributor2 = resolver.resolve("cbd3d5a", "ophelia@globe-theatre.com");
+            let contributor1 = resolver.resolve(Some("3a1d4ed"), "ophelia@globe-theatre.com");
+            let contributor2 = resolver.resolve(Some("cbd3d5a"), "ophelia@globe-theatre.com");
             (contributor1, contributor2)
         })
         .await
@@ -315,10 +317,11 @@ mod tests {
         let platform = create_test_platform(&mock_server.uri());
         let mut resolver = GitHubResolver::new(&platform).unwrap();
 
-        let username =
-            tokio::task::spawn_blocking(move || resolver.resolve("da49181", "test@example.com"))
-                .await
-                .unwrap();
+        let username = tokio::task::spawn_blocking(move || {
+            resolver.resolve(Some("da49181"), "test@example.com")
+        })
+        .await
+        .unwrap();
 
         assert_eq!(username, None);
     }
@@ -352,7 +355,10 @@ mod tests {
         let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("127fca5", "12345678+prospero@users.noreply.github.com")
+            resolver.resolve(
+                Some("127fca5"),
+                "12345678+prospero@users.noreply.github.com",
+            )
         })
         .await
         .unwrap();
@@ -400,7 +406,7 @@ mod tests {
         let mut resolver = GitHubResolver::new(&platform).unwrap();
 
         let contributor = tokio::task::spawn_blocking(move || {
-            resolver.resolve("f6ab8dd", "noreply@anthropic.com")
+            resolver.resolve(Some("f6ab8dd"), "noreply@anthropic.com")
         })
         .await
         .unwrap();
@@ -412,6 +418,84 @@ mod tests {
                 avatar_url: AVATAR_URL.to_string(),
                 is_bot: false,
                 is_ai: true,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn coauthor_with_unresolvable_email_does_not_trigger_commit_api() {
+        use wiremock::matchers::{method, path_regex};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(format!(
+                r"^/repos/{}/{}/commits/",
+                REPO_OWNER, REPO_NAME
+            )))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
+
+        let contributor =
+            tokio::task::spawn_blocking(move || resolver.resolve(None, "coauthor@example.com"))
+                .await
+                .unwrap();
+
+        assert_eq!(contributor, None);
+    }
+
+    #[tokio::test]
+    async fn coauthor_miss_does_not_poison_cache_for_primary_author() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/repos/{}/{}/commits/abc1234",
+                REPO_OWNER, REPO_NAME
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "author": { "login": "horatio" }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/users/horatio"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "avatar_url": AVATAR_URL,
+                "type": "User",
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let platform = create_test_platform(&mock_server.uri());
+        let mut resolver = GitHubResolver::new(&platform).unwrap();
+
+        let contributor = tokio::task::spawn_blocking(move || {
+            // co-author resolution: should not cache a miss
+            let _ = resolver.resolve(None, "horatio@elsinore.dk");
+            // primary author resolution with same email: should hit commit API
+            resolver.resolve(Some("abc1234"), "horatio@elsinore.dk")
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            contributor,
+            Some(Contributor {
+                username: "horatio".to_string(),
+                avatar_url: AVATAR_URL.to_string(),
+                is_bot: false,
+                is_ai: false,
             })
         );
     }
@@ -445,10 +529,11 @@ mod tests {
         let platform = create_test_platform(&mock_server.uri());
         let mut resolver = GitHubResolver::new(&platform).unwrap();
 
-        let contributor =
-            tokio::task::spawn_blocking(move || resolver.resolve("a1b2c3d", "hamlet@denmark.dk"))
-                .await
-                .unwrap();
+        let contributor = tokio::task::spawn_blocking(move || {
+            resolver.resolve(Some("a1b2c3d"), "hamlet@denmark.dk")
+        })
+        .await
+        .unwrap();
 
         assert_eq!(
             contributor,

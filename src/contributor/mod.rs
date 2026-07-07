@@ -19,7 +19,13 @@ pub struct Contributor {
 }
 
 pub trait PlatformResolver {
-    fn resolve(&mut self, commit_hash: &str, email: &str) -> Option<Contributor>;
+    /// Resolve a contributor by email.
+    ///
+    /// Pass `Some(hash)` for the commit's primary author — enables the commit API/GraphQL
+    /// fallback and caches negative results. Pass `None` for co-authors — skips the commit
+    /// API fallback (which would return the wrong person) and does not cache misses so the
+    /// same email can still be resolved later via the primary-author path.
+    fn resolve(&mut self, commit_hash: Option<&str>, email: &str) -> Option<Contributor>;
 
     /// Resolves known AI assistant contributors by their email addresses.
     ///
@@ -109,15 +115,17 @@ impl ContributorResolver {
         use crate::git::GitTrailer;
 
         for commit in commits {
-            if let Some(contributor) = self.platform_resolver.resolve(&commit.hash, &commit.email) {
+            if let Some(contributor) = self
+                .platform_resolver
+                .resolve(Some(&commit.hash), &commit.email)
+            {
                 commit.contributors.push(contributor);
             }
 
             for trailer in &commit.trailers {
                 if let GitTrailer::CoAuthoredBy { name: _, email } = trailer
                     && let Some(email_addr) = email
-                    && let Some(contributor) =
-                        self.platform_resolver.resolve(&commit.hash, email_addr)
+                    && let Some(contributor) = self.platform_resolver.resolve(None, email_addr)
                     && !commit
                         .contributors
                         .iter()

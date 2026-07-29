@@ -24,3 +24,15 @@ If you have nix installed, you can run the binary directly from the GitHub repos
 ```sh
 nix run github:purpleclay/release-note -- --help
 ```
+
+## Verifying a release
+
+Every release archive (and `checksums.txt`) is a subject of a SLSA build provenance attestation, signed by the [release-workflows](https://github.com/purpleclay/release-workflows) reusable workflow that built it:
+
+```sh
+gh attestation verify <archive>.tar.gz \
+  --repo purpleclay/release-note \
+  --signer-workflow purpleclay/release-workflows/.github/workflows/release-rust.yml
+```
+
+The `--signer-workflow` check confirms the signing identity belongs to that reusable workflow, not this repository directly — the SLSA Build L3 claim.

@@ -120,6 +120,7 @@ pub struct LinkedIssue {
 pub struct Commit {
     pub hash: String,
     pub first_line: String,
+    pub description: String,
     pub body: Option<String>,
     pub scope: String,
     #[serde(rename = "type")]
@@ -154,6 +155,7 @@ impl Commit {
         Commit {
             hash,
             first_line,
+            description: String::new(),
             body,
             scope: String::new(),
             type_: String::new(),

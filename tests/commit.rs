@@ -115,6 +115,7 @@ impl CommitBuilder {
         Commit {
             hash,
             first_line: self.first_line,
+            description: String::new(),
             body: self.body,
             scope: String::new(),
             type_: String::new(),

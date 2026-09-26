@@ -1,12 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::git::Commit;
 
 static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([a-z-]+)\))?(!)?(?:\s*):(?:\s*).+").unwrap());
+    Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([a-z-]+)\))?(!)?(?:\s*):(?:\s*)(.+)").unwrap());
 
 static BREAKING_FOOTER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:").unwrap());
@@ -18,33 +18,12 @@ struct ConventionalCommit {
     commit_type: String,
     scope: Option<String>,
     breaking: bool,
-}
-
-struct CommitMeta {
-    scope: String,
-    type_: String,
-    breaking: bool,
-    breaking_description: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
-pub enum CommitCategory {
-    Breaking,
-    Chore,
-    CI,
-    Dependencies,
-    Documentation,
-    Feature,
-    Fix,
-    Other,
-    Performance,
-    Refactor,
-    Test,
+    description: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct CategorizedCommits {
-    pub by_category: HashMap<CommitCategory, Vec<Commit>>,
+pub struct AnalyzedCommits {
+    pub commits: Vec<Commit>,
     pub contributors: Vec<ContributorSummary>,
 }
 
@@ -62,87 +41,58 @@ pub struct ContributorSummary {
 pub struct CommitAnalyzer;
 
 impl CommitAnalyzer {
-    pub fn analyze(commits: &[Commit]) -> CategorizedCommits {
-        let mut by_category: HashMap<CommitCategory, Vec<Commit>> = HashMap::new();
+    pub fn analyze(commits: &[Commit]) -> AnalyzedCommits {
+        let analyzed: Vec<Commit> = commits.iter().map(Self::analyze_commit).collect();
 
-        for commit in commits {
-            let (category, meta) = Self::categorize(commit);
-            let mut c = commit.clone();
-            c.scope = meta.scope;
-            c.type_ = meta.type_;
-            c.breaking = meta.breaking;
-            c.breaking_description = meta.breaking_description;
-            by_category.entry(category).or_default().push(c);
+        let mut by_type: BTreeMap<&str, usize> = BTreeMap::new();
+        for commit in &analyzed {
+            let type_ = if commit.type_.is_empty() {
+                "other"
+            } else {
+                commit.type_.as_str()
+            };
+            *by_type.entry(type_).or_default() += 1;
         }
 
-        log::info!("attempting to categorize commits");
-        for (category, commits) in &by_category {
+        log::info!("analyzed commits by type");
+        for (type_, count) in &by_type {
             log::info!(
                 "  * {}: {} commit{}",
-                format!("{:?}", category).to_lowercase(),
-                commits.len(),
-                if commits.len() == 1 { "" } else { "s" }
+                type_,
+                count,
+                if *count == 1 { "" } else { "s" }
             );
         }
 
         let contributors = Self::aggregate_contributors(commits);
 
-        CategorizedCommits {
-            by_category,
+        AnalyzedCommits {
+            commits: analyzed,
             contributors,
         }
     }
 
-    fn categorize(commit: &Commit) -> (CommitCategory, CommitMeta) {
+    fn analyze_commit(commit: &Commit) -> Commit {
         let parsed = Self::parse_conventional_commit(&commit.first_line);
-        let scope = parsed
-            .as_ref()
-            .and_then(|p| p.scope.clone())
-            .unwrap_or_default();
-        let type_ = parsed
-            .as_ref()
-            .map(|p| p.commit_type.clone())
-            .unwrap_or_default();
-        let breaking_bang = parsed.as_ref().map(|p| p.breaking).unwrap_or(false);
         let has_footer = Self::has_breaking_footer(commit);
-        let breaking = breaking_bang || has_footer;
-        let breaking_description = if has_footer {
+
+        let mut c = commit.clone();
+        c.breaking = parsed.as_ref().is_some_and(|p| p.breaking) || has_footer;
+        c.breaking_description = if has_footer {
             Self::extract_breaking_description(commit)
         } else {
             None
         };
 
-        let meta = CommitMeta {
-            scope,
-            type_,
-            breaking,
-            breaking_description,
-        };
-
-        if breaking {
-            return (CommitCategory::Breaking, meta);
-        }
-
-        if let Some(ref parsed) = parsed {
-            if parsed.scope.as_deref() == Some("deps") {
-                return (CommitCategory::Dependencies, meta);
-            }
-
-            let category = match parsed.commit_type.as_str() {
-                "feat" => CommitCategory::Feature,
-                "fix" => CommitCategory::Fix,
-                "docs" => CommitCategory::Documentation,
-                "ci" => CommitCategory::CI,
-                "test" => CommitCategory::Test,
-                "perf" => CommitCategory::Performance,
-                "chore" => CommitCategory::Chore,
-                "refactor" => CommitCategory::Refactor,
-                _ => CommitCategory::Other,
-            };
-            (category, meta)
+        if let Some(parsed) = parsed {
+            c.description = parsed.description;
+            c.scope = parsed.scope.unwrap_or_default();
+            c.type_ = parsed.commit_type;
         } else {
-            (CommitCategory::Other, meta)
+            c.description = commit.first_line.clone();
         }
+
+        c
     }
 
     fn find_breaking_trailer(commit: &Commit) -> Option<&str> {
@@ -183,11 +133,13 @@ impl CommitAnalyzer {
             let commit_type = captures.get(1)?.as_str().to_lowercase();
             let scope = captures.get(2).map(|m| m.as_str().to_lowercase());
             let breaking = captures.get(3).is_some();
+            let description = captures.get(4)?.as_str().to_string();
 
             Some(ConventionalCommit {
                 commit_type,
                 scope,
                 breaking,
+                description,
             })
         } else {
             None

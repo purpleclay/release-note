@@ -1,62 +1,38 @@
 mod commit;
 
 use commit::CommitBuilder;
-use release_note::analyzer::{CommitAnalyzer, CommitCategory};
+use release_note::analyzer::CommitAnalyzer;
 
 #[test]
-fn categorizes_commits() {
+fn parses_commit_types() {
     let test_cases = vec![
-        ("feat: to be or not to be", CommitCategory::Feature),
-        ("fix: all the world's a stage", CommitCategory::Fix),
-        (
-            "docs: a horse! a horse! my kingdom for a horse!",
-            CommitCategory::Documentation,
-        ),
-        (
-            "build: if music be the food of love, play on",
-            CommitCategory::Other,
-        ),
-        (
-            "style: lord, what fools these mortals be!",
-            CommitCategory::Other,
-        ),
+        ("feat: to be or not to be", "feat"),
+        ("fix: all the world's a stage", "fix"),
+        ("docs: a horse! a horse! my kingdom for a horse!", "docs"),
+        ("build: if music be the food of love, play on", "build"),
+        ("style: lord, what fools these mortals be!", "style"),
         (
             "refactor: cowards die many times before their deaths",
-            CommitCategory::Refactor,
+            "refactor",
         ),
-        (
-            "perf: something is rotten in the state of denmark",
-            CommitCategory::Performance,
-        ),
-        (
-            "test: the lady doth protest too much, methinks",
-            CommitCategory::Test,
-        ),
-        (
-            "ci: though this be madness, yet there is method in't",
-            CommitCategory::CI,
-        ),
-        (
-            "chore: now is the winter of our discontent",
-            CommitCategory::Chore,
-        ),
-        (
-            "there is a tide in the affairs of men",
-            CommitCategory::Other,
-        ),
+        ("perf: something is rotten in the state of denmark", "perf"),
+        ("test: the lady doth protest too much, methinks", "test"),
+        ("ci: though this be madness, yet there is method in't", "ci"),
+        ("chore: now is the winter of our discontent", "chore"),
+        ("there is a tide in the affairs of men", ""),
     ];
 
-    for (commit_msg, expected_category) in test_cases {
+    for (commit_msg, expected_type) in test_cases {
         let commit = CommitBuilder::new(commit_msg).build();
         let result = CommitAnalyzer::analyze(&[commit]);
-        let commit = result.by_category.get(&expected_category).unwrap();
-        assert_eq!(commit.len(), 1);
-        assert_eq!(commit[0].first_line, commit_msg);
+        assert_eq!(result.commits.len(), 1);
+        assert_eq!(result.commits[0].first_line, commit_msg);
+        assert_eq!(result.commits[0].type_, expected_type);
     }
 }
 
 #[test]
-fn categorizes_by_breaking_change_in_footer() {
+fn detects_breaking_change_in_footer() {
     let commit = CommitBuilder::new("fix: the course of true love never did run smooth")
         .with_body(
             "When sorrows come, they come not single spies, but in battalions. \
@@ -71,62 +47,22 @@ BREAKING CHANGE: but in battalions",
         )
         .build();
     let result = CommitAnalyzer::analyze(&[commit]);
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert_eq!(breaking.len(), 1);
-    assert_eq!(
-        breaking[0].first_line,
-        "fix: the course of true love never did run smooth"
-    );
+    assert!(result.commits[0].breaking);
+    assert_eq!(result.commits[0].type_, "fix");
 }
 
 #[test]
-fn categorizes_breaking_change_by_hash_bang() {
+fn detects_breaking_change_by_hash_bang() {
     let commit =
         CommitBuilder::new("refactor(ui)!: when sorrows come, they come not single spies").build();
     let result = CommitAnalyzer::analyze(&[commit]);
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert_eq!(breaking.len(), 1);
-    assert_eq!(
-        breaking[0].first_line,
-        "refactor(ui)!: when sorrows come, they come not single spies"
-    );
+    assert!(result.commits[0].breaking);
+    assert_eq!(result.commits[0].type_, "refactor");
+    assert_eq!(result.commits[0].scope, "ui");
 }
 
 #[test]
-fn categorizes_commits_while_retaining_order() {
-    let commits = vec![
-        CommitBuilder::new("feat: love all, trust a few, do wrong to none").build(),
-        CommitBuilder::new("fix: some rise by sin, and some by virtue fall").build(),
-        CommitBuilder::new("feat: be not afraid of greatness").build(),
-        CommitBuilder::new("feat: hell is empty and all the devils are here").build(),
-        CommitBuilder::new("fix: brevity is the soul of wit").build(),
-    ];
-
-    let result = CommitAnalyzer::analyze(&commits);
-
-    let features = result.by_category.get(&CommitCategory::Feature).unwrap();
-    assert_eq!(features.len(), 3);
-    assert_eq!(
-        features[0].first_line,
-        "feat: love all, trust a few, do wrong to none"
-    );
-    assert_eq!(features[1].first_line, "feat: be not afraid of greatness");
-    assert_eq!(
-        features[2].first_line,
-        "feat: hell is empty and all the devils are here"
-    );
-
-    let fixes = result.by_category.get(&CommitCategory::Fix).unwrap();
-    assert_eq!(fixes.len(), 2);
-    assert_eq!(
-        fixes[0].first_line,
-        "fix: some rise by sin, and some by virtue fall"
-    );
-    assert_eq!(fixes[1].first_line, "fix: brevity is the soul of wit");
-}
-
-#[test]
-fn categorizes_by_dependency_scope() {
+fn parses_dependency_scope() {
     let commits = vec![
         CommitBuilder::new("feat(deps): all that glisters is not gold").build(),
         CommitBuilder::new("fix(deps): give every man thy ear, but few thy voice").build(),
@@ -137,11 +73,7 @@ fn categorizes_by_dependency_scope() {
 
     let result = CommitAnalyzer::analyze(&commits);
 
-    let deps = result
-        .by_category
-        .get(&CommitCategory::Dependencies)
-        .unwrap();
-    assert_eq!(deps.len(), 5);
+    assert!(result.commits.iter().all(|c| c.scope == "deps"));
 }
 
 #[test]
@@ -155,34 +87,8 @@ fn supports_mixed_case_commit_types() {
 
     let result = CommitAnalyzer::analyze(&commits);
 
-    assert_eq!(
-        result
-            .by_category
-            .get(&CommitCategory::Feature)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        result.by_category.get(&CommitCategory::Fix).unwrap().len(),
-        1
-    );
-    assert_eq!(
-        result
-            .by_category
-            .get(&CommitCategory::Documentation)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        result
-            .by_category
-            .get(&CommitCategory::Chore)
-            .unwrap()
-            .len(),
-        1
-    );
+    let types: Vec<_> = result.commits.iter().map(|c| c.type_.as_str()).collect();
+    assert_eq!(types, vec!["feat", "fix", "docs", "chore"]);
 }
 
 #[test]
@@ -196,18 +102,8 @@ fn supports_flexible_spacing_in_commit_format() {
 
     let result = CommitAnalyzer::analyze(&commits);
 
-    assert_eq!(
-        result
-            .by_category
-            .get(&CommitCategory::Feature)
-            .unwrap()
-            .len(),
-        2
-    );
-    assert_eq!(
-        result.by_category.get(&CommitCategory::Fix).unwrap().len(),
-        2
-    );
+    let types: Vec<_> = result.commits.iter().map(|c| c.type_.as_str()).collect();
+    assert_eq!(types, vec!["feat", "fix", "feat", "fix"]);
 }
 
 #[test]
@@ -232,8 +128,7 @@ fn supports_flexible_breaking_footer_formats() {
 
     let result = CommitAnalyzer::analyze(&commits);
 
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert_eq!(breaking.len(), 5);
+    assert!(result.commits.iter().all(|c| c.breaking));
 }
 
 #[test]
@@ -247,28 +142,7 @@ fn detects_breaking_change_when_parsed_as_trailer() {
         .build();
 
     let result = CommitAnalyzer::analyze(&[commit]);
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert_eq!(breaking.len(), 1);
-}
-
-#[test]
-fn populates_type_from_conventional_commit() {
-    let commits = vec![
-        CommitBuilder::new("feat(api): something scoped").build(),
-        CommitBuilder::new("fix: a plain fix").build(),
-        CommitBuilder::new("not a conventional commit").build(),
-    ];
-
-    let result = CommitAnalyzer::analyze(&commits);
-
-    let features = result.by_category.get(&CommitCategory::Feature).unwrap();
-    assert_eq!(features[0].type_, "feat");
-
-    let fixes = result.by_category.get(&CommitCategory::Fix).unwrap();
-    assert_eq!(fixes[0].type_, "fix");
-
-    let other = result.by_category.get(&CommitCategory::Other).unwrap();
-    assert_eq!(other[0].type_, "");
+    assert!(result.commits[0].breaking);
 }
 
 #[test]
@@ -276,9 +150,8 @@ fn sets_breaking_true_for_bang_commits() {
     let commit = CommitBuilder::new("feat!: something breaking").build();
     let result = CommitAnalyzer::analyze(&[commit]);
 
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert!(breaking[0].breaking);
-    assert_eq!(breaking[0].breaking_description, None);
+    assert!(result.commits[0].breaking);
+    assert_eq!(result.commits[0].breaking_description, None);
 }
 
 #[test]
@@ -288,10 +161,9 @@ fn sets_breaking_true_and_description_for_footer_commits() {
         .build();
     let result = CommitAnalyzer::analyze(&[commit]);
 
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert!(breaking[0].breaking);
+    assert!(result.commits[0].breaking);
     assert_eq!(
-        breaking[0].breaking_description,
+        result.commits[0].breaking_description,
         Some("with mirth and laughter let old wrinkles come".to_string())
     );
 }
@@ -303,10 +175,9 @@ fn sets_breaking_true_and_description_from_trailer() {
         .build();
     let result = CommitAnalyzer::analyze(&[commit]);
 
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert!(breaking[0].breaking);
+    assert!(result.commits[0].breaking);
     assert_eq!(
-        breaking[0].breaking_description,
+        result.commits[0].breaking_description,
         Some("shall I compare thee to a summer's day".to_string())
     );
 }
@@ -320,9 +191,8 @@ fn captures_multiline_breaking_description_from_body() {
         .build();
     let result = CommitAnalyzer::analyze(&[commit]);
 
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
     assert_eq!(
-        breaking[0].breaking_description,
+        result.commits[0].breaking_description,
         Some("with mirth and laughter let old wrinkles come\nand so the whirligig of time brings in his revenges".to_string())
     );
 }
@@ -335,11 +205,9 @@ fn non_breaking_commits_have_breaking_false() {
     ];
     let result = CommitAnalyzer::analyze(&commits);
 
-    for commits in result.by_category.values() {
-        for commit in commits {
-            assert!(!commit.breaking);
-            assert_eq!(commit.breaking_description, None);
-        }
+    for commit in &result.commits {
+        assert!(!commit.breaking);
+        assert_eq!(commit.breaking_description, None);
     }
 }
 
@@ -353,12 +221,77 @@ fn populates_scope_from_conventional_commit() {
 
     let result = CommitAnalyzer::analyze(&commits);
 
-    let features = result.by_category.get(&CommitCategory::Feature).unwrap();
-    assert_eq!(features[0].scope, "api");
-    assert_eq!(features[1].scope, "");
+    let scopes: Vec<_> = result.commits.iter().map(|c| c.scope.as_str()).collect();
+    assert_eq!(scopes, vec!["api", "", ""]);
+}
 
-    let other = result.by_category.get(&CommitCategory::Other).unwrap();
-    assert_eq!(other[0].scope, "");
+#[test]
+fn populates_description_from_conventional_commit() {
+    let commits = vec![
+        CommitBuilder::new("feat(api): the quality of mercy is not strained").build(),
+        CommitBuilder::new("feat!: once more unto the breach").build(),
+        CommitBuilder::new("fix(scope) :  a man can die but once").build(),
+        CommitBuilder::new("not a conventional commit").build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    let descriptions: Vec<_> = result
+        .commits
+        .iter()
+        .map(|c| c.description.as_str())
+        .collect();
+    assert_eq!(
+        descriptions,
+        vec![
+            "the quality of mercy is not strained",
+            "once more unto the breach",
+            "a man can die but once",
+            "not a conventional commit",
+        ]
+    );
+}
+
+#[test]
+fn exposes_all_commits_in_original_order() {
+    let commits = vec![
+        CommitBuilder::new("feat: love all, trust a few, do wrong to none").build(),
+        CommitBuilder::new("chore(deps): all that glisters is not gold").build(),
+        CommitBuilder::new("fix!: some rise by sin, and some by virtue fall").build(),
+        CommitBuilder::new("build(api): if music be the food of love, play on").build(),
+        CommitBuilder::new("there is a tide in the affairs of men").build(),
+    ];
+
+    let result = CommitAnalyzer::analyze(&commits);
+
+    let actual: Vec<_> = result
+        .commits
+        .iter()
+        .map(|c| {
+            (
+                c.type_.as_str(),
+                c.scope.as_str(),
+                c.breaking,
+                c.description.as_str(),
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        actual,
+        vec![
+            ("feat", "", false, "love all, trust a few, do wrong to none"),
+            ("chore", "deps", false, "all that glisters is not gold"),
+            ("fix", "", true, "some rise by sin, and some by virtue fall"),
+            (
+                "build",
+                "api",
+                false,
+                "if music be the food of love, play on"
+            ),
+            ("", "", false, "there is a tide in the affairs of men"),
+        ]
+    );
 }
 
 #[test]
@@ -369,6 +302,5 @@ fn detects_breaking_change_trailer_with_hyphen() {
         .build();
 
     let result = CommitAnalyzer::analyze(&[commit]);
-    let breaking = result.by_category.get(&CommitCategory::Breaking).unwrap();
-    assert_eq!(breaking.len(), 1);
+    assert!(result.commits[0].breaking);
 }

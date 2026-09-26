@@ -1,7 +1,4 @@
-use crate::{
-    analyzer::{CategorizedCommits, CommitCategory},
-    platform::Platform,
-};
+use crate::{analyzer::AnalyzedCommits, platform::Platform};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -177,38 +174,47 @@ fn mention_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result
     }
 }
 
-fn get_string_array(value: &Value) -> Vec<String> {
+fn get_lowercase_strings(value: &Value) -> Vec<String> {
     match value {
         Value::Array(arr) => arr
             .iter()
-            .filter_map(|v| v.as_str().map(String::from))
+            .filter_map(|v| v.as_str().map(str::to_lowercase))
             .collect(),
-        Value::String(s) => vec![s.clone()],
+        Value::String(s) => vec![s.to_lowercase()],
         _ => vec![],
     }
 }
 
-fn prefix_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
+fn filter_by_field(
+    value: &Value,
+    args: &HashMap<String, Value>,
+    field: &str,
+    filter: &str,
+) -> tera::Result<Value> {
     let arr = value
         .as_array()
-        .ok_or_else(|| tera::Error::msg("prefix filter requires an array"))?;
+        .ok_or_else(|| tera::Error::msg(format!("{} filter requires an array", filter)))?;
 
     let include = args
         .get("include")
-        .map(get_string_array)
+        .map(get_lowercase_strings)
         .unwrap_or_default();
     let exclude = args
         .get("exclude")
-        .map(get_string_array)
+        .map(get_lowercase_strings)
         .unwrap_or_default();
 
     let filtered: Vec<Value> = arr
         .iter()
         .filter(|item| {
-            let first_line = item.get("first_line").and_then(Value::as_str).unwrap_or("");
+            let field = item
+                .get(field)
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_lowercase();
 
-            let included = include.is_empty() || include.iter().any(|p| first_line.starts_with(p));
-            let excluded = exclude.iter().any(|p| first_line.starts_with(p));
+            let included = include.is_empty() || include.contains(&field);
+            let excluded = exclude.contains(&field);
 
             included && !excluded
         })
@@ -218,19 +224,12 @@ fn prefix_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<V
     Ok(Value::Array(filtered))
 }
 
-fn strip_conventional_prefix_filter(
-    value: &Value,
-    _args: &HashMap<String, Value>,
-) -> tera::Result<Value> {
-    static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"(?i)^[a-z]+(?:\([a-z-]+\))?!?\s*:\s*").unwrap());
+fn typed_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
+    filter_by_field(value, args, "type", "typed")
+}
 
-    let text = value.as_str().ok_or_else(|| {
-        tera::Error::msg("strip_conventional_prefix filter requires a string value")
-    })?;
-
-    let stripped = CONVENTIONAL_COMMIT_PREFIX.replace(text, "").to_string();
-    Ok(Value::String(stripped))
+fn scoped_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
+    filter_by_field(value, args, "scope", "scoped")
 }
 
 fn table_escape_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
@@ -280,13 +279,13 @@ fn register_platform_functions(tera: &mut tera::Tera, git_ref: &str, platform: &
 }
 
 pub fn render_history(
-    categorized: &CategorizedCommits,
+    analyzed: &AnalyzedCommits,
     platform: &Platform,
     git_ref: &str,
     release_date: i64,
     template: &str,
 ) -> Result<String> {
-    if categorized.by_category.is_empty() {
+    if analyzed.commits.is_empty() {
         return Ok(String::new());
     }
 
@@ -296,53 +295,17 @@ pub fn render_history(
 
     tera.register_filter("unwrap", unwrap_filter);
     tera.register_filter("mention", mention_filter);
-    tera.register_filter("prefix", prefix_filter);
-    tera.register_filter(
-        "strip_conventional_prefix",
-        strip_conventional_prefix_filter,
-    );
+    tera.register_filter("typed", typed_filter);
+    tera.register_filter("scoped", scoped_filter);
     tera.register_filter("table_escape", table_escape_filter);
 
     register_platform_functions(&mut tera, git_ref, platform);
 
     let mut context = tera::Context::new();
-    context.insert("contributors", &categorized.contributors);
+    context.insert("commits", &analyzed.commits);
+    context.insert("contributors", &analyzed.contributors);
     context.insert("git_ref", git_ref);
     context.insert("release_date", &release_date);
-
-    if let Some(breaking) = categorized.by_category.get(&CommitCategory::Breaking) {
-        context.insert("breaking", breaking);
-    }
-    if let Some(chore) = categorized.by_category.get(&CommitCategory::Chore) {
-        context.insert("chore", chore);
-    }
-    if let Some(ci) = categorized.by_category.get(&CommitCategory::CI) {
-        context.insert("ci", ci);
-    }
-    if let Some(dependencies) = categorized.by_category.get(&CommitCategory::Dependencies) {
-        context.insert("dependencies", dependencies);
-    }
-    if let Some(docs) = categorized.by_category.get(&CommitCategory::Documentation) {
-        context.insert("docs", docs);
-    }
-    if let Some(features) = categorized.by_category.get(&CommitCategory::Feature) {
-        context.insert("features", features);
-    }
-    if let Some(fixes) = categorized.by_category.get(&CommitCategory::Fix) {
-        context.insert("fixes", fixes);
-    }
-    if let Some(other) = categorized.by_category.get(&CommitCategory::Other) {
-        context.insert("other", other);
-    }
-    if let Some(perf) = categorized.by_category.get(&CommitCategory::Performance) {
-        context.insert("perf", perf);
-    }
-    if let Some(refactor) = categorized.by_category.get(&CommitCategory::Refactor) {
-        context.insert("refactor", refactor);
-    }
-    if let Some(test) = categorized.by_category.get(&CommitCategory::Test) {
-        context.insert("test", test);
-    }
 
     let rendered = tera
         .render("main", &context)

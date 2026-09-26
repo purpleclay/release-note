@@ -92,7 +92,7 @@ fn main() -> Result<()> {
         resolver.resolve_contributors(&mut history);
     }
 
-    let categorized = CommitAnalyzer::analyze(&history);
+    let analyzed = CommitAnalyzer::analyze(&history);
     log::info!("");
 
     let release_date = std::time::SystemTime::now()
@@ -102,7 +102,7 @@ fn main() -> Result<()> {
 
     println!(
         "{}",
-        markdown::render_history(&categorized, &platform, &git_ref, release_date, &template)?
+        markdown::render_history(&analyzed, &platform, &git_ref, release_date, &template)?
     );
     Ok(())
 }

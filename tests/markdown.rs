@@ -1,79 +1,50 @@
 mod commit;
 
 use commit::CommitBuilder;
-use release_note::analyzer::{CategorizedCommits, CommitCategory, ContributorSummary};
+use release_note::analyzer::{AnalyzedCommits, CommitAnalyzer, ContributorSummary};
 use release_note::markdown;
 use release_note::platform::Platform;
 use release_note::template::DEFAULT_TEMPLATE;
-use std::collections::HashMap;
 
 // Fixed timestamp for tests: November 27, 2025 00:00:00 UTC
 const TEST_RELEASE_DATE: i64 = 1764201600;
 
 #[test]
 fn generates_release_note_from_multiple_categories() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Breaking,
-        vec![
-            CommitBuilder::new("feat!: the course of true love never did run smooth")
-                .with_body("Lord, what fools these mortals be! The lunatic, the lover and the poet are of imagination all compact.")
-                .build(),
-            CommitBuilder::new("refactor(york)!: now is the winter of our discontent")
-                .with_body("BREAKING CHANGE: made glorious summer by this sun of York.")
-                .build(),
-        ],
-    );
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: all the world's a stage")
-                .with_body("And all the men and women merely players. They have their exits and their entrances; and one man in his time plays many parts.")
-                .build(),
-            CommitBuilder::new("feat: to be or not to be")
-                .build(),
-        ],
-    );
-
-    by_category.insert(
-        CommitCategory::Fix,
-        vec![CommitBuilder::new("fix: though she be but little, she is fierce")
+    let commits = vec![
+        CommitBuilder::new("feat!: the course of true love never did run smooth")
+            .with_body("Lord, what fools these mortals be! The lunatic, the lover and the poet are of imagination all compact.")
+            .build(),
+        CommitBuilder::new("refactor(york)!: now is the winter of our discontent")
+            .with_body("BREAKING CHANGE: made glorious summer by this sun of York.")
+            .build(),
+        CommitBuilder::new("feat: all the world's a stage")
+            .with_body("And all the men and women merely players. They have their exits and their entrances; and one man in his time plays many parts.")
+            .build(),
+        CommitBuilder::new("feat: to be or not to be").build(),
+        CommitBuilder::new("fix: though she be but little, she is fierce")
             .with_body("Some are born great, some achieve greatness, and some have greatness thrust upon them.")
-            .build()],
-    );
+            .build(),
+        CommitBuilder::new("perf: brevity is the soul of wit").build(),
+        CommitBuilder::new("perf: swift as a shadow, short as any dream")
+            .with_body("So quick bright things come to confusion.")
+            .build(),
+        CommitBuilder::new("chore(deps): all that glisters is not gold").build(),
+        CommitBuilder::new("fix(deps): the better part of valor is discretion")
+            .with_contributor_bot("renovate[bot]")
+            .build(),
+        CommitBuilder::new("fix(deps): though this be madness, yet there is method in it")
+            .with_contributor_bot("renovate[bot]")
+            .with_contributor("shakespeare")
+            .build(),
+    ];
 
-    by_category.insert(
-        CommitCategory::Performance,
-        vec![
-            CommitBuilder::new("perf: brevity is the soul of wit").build(),
-            CommitBuilder::new("perf: swift as a shadow, short as any dream")
-                .with_body("So quick bright things come to confusion.")
-                .build(),
-        ],
-    );
-
-    by_category.insert(
-        CommitCategory::Dependencies,
-        vec![
-            CommitBuilder::new("chore(deps): all that glisters is not gold").build(),
-            CommitBuilder::new("fix(deps): the better part of valor is discretion")
-                .with_contributor_bot("renovate[bot]")
-                .build(),
-            CommitBuilder::new("fix(deps): though this be madness, yet there is method in it")
-                .with_contributor_bot("renovate[bot]")
-                .with_contributor("shakespeare")
-                .build(),
-        ],
-    );
-
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -86,21 +57,18 @@ fn generates_release_note_from_multiple_categories() {
 
 #[test]
 fn includes_chore_deps_commits_in_dependency_table() {
-    let mut by_category = HashMap::new();
-    by_category.insert(
-        CommitCategory::Dependencies,
-        vec![
-            CommitBuilder::new("chore(deps): bump serde to 1.0.200")
-                .with_contributor_bot("renovate[bot]")
-                .build(),
-        ],
-    );
-    let categorized = CategorizedCommits {
-        by_category,
+    let commits = vec![
+        CommitBuilder::new("chore(deps): bump serde to 1.0.200")
+            .with_contributor_bot("renovate[bot]")
+            .build(),
+    ];
+
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -112,25 +80,20 @@ fn includes_chore_deps_commits_in_dependency_table() {
 
 #[test]
 fn displays_contributors_with_github_commit_links() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: the course of true love never did run smooth")
-                .with_contributor("shakespeare")
-                .with_timestamp(1748390400)
-                .build(),
-            CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
-                .with_contributor("shakespeare")
-                .with_timestamp(1748476800)
-                .build(),
-            CommitBuilder::new("feat: all the world's a stage")
-                .with_contributor("marlowe")
-                .with_timestamp(1748390400)
-                .build(),
-        ],
-    );
+    let commits = vec![
+        CommitBuilder::new("feat: the course of true love never did run smooth")
+            .with_contributor("shakespeare")
+            .with_timestamp(1748390400)
+            .build(),
+        CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
+            .with_contributor("shakespeare")
+            .with_timestamp(1748476800)
+            .build(),
+        CommitBuilder::new("feat: all the world's a stage")
+            .with_contributor("marlowe")
+            .with_timestamp(1748390400)
+            .build(),
+    ];
 
     let contributors = vec![
         ContributorSummary {
@@ -161,12 +124,12 @@ fn displays_contributors_with_github_commit_links() {
         token: None,
     };
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors,
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &platform,
         "v1.0.0",
         TEST_RELEASE_DATE,
@@ -179,12 +142,7 @@ fn displays_contributors_with_github_commit_links() {
 
 #[test]
 fn displays_contributors_without_links_for_gitlab() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: all the world's a stage").build()],
-    );
+    let commits = vec![CommitBuilder::new("feat: all the world's a stage").build()];
 
     let contributors = vec![
         ContributorSummary {
@@ -217,12 +175,12 @@ fn displays_contributors_without_links_for_gitlab() {
         token: None,
     };
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors,
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &platform,
         "v1.0.0",
         TEST_RELEASE_DATE,
@@ -235,14 +193,10 @@ fn displays_contributors_without_links_for_gitlab() {
 
 #[test]
 fn unwraps_paragraphs_to_single_lines() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: add the quality of mercy soliloquy")
-                .with_body(
-                    "The quality of mercy is not strained.
+    let commits = vec![
+        CommitBuilder::new("feat: add the quality of mercy soliloquy")
+            .with_body(
+                "The quality of mercy is not strained.
 It droppeth as the gentle rain from heaven
 upon the place beneath. It is twice blessed:
 it blesseth him that gives and him that takes.
@@ -251,17 +205,16 @@ it blesseth him that gives and him that takes.
 the throned monarch better than his crown.
 His scepter shows the force of temporal power,
 the attribute to awe and majesty.",
-                )
-                .build(),
-        ],
-    );
+            )
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -274,11 +227,8 @@ the attribute to awe and majesty.",
 
 #[test]
 fn unwraps_list_items_to_single_lines() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: the seven ages of man")
+    let commits = vec![
+CommitBuilder::new("feat: the seven ages of man")
             .with_body(
                 "All the world's a stage, and all the men and women merely players. They have their exits and their entrances; and one man in his time plays many parts, his acts being seven ages:
 
@@ -290,15 +240,15 @@ fn unwraps_list_items_to_single_lines() {
 
 That is the last scene of all, that ends this strange eventful history.",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -311,11 +261,8 @@ That is the last scene of all, that ends this strange eventful history.",
 
 #[test]
 fn unwraps_numbered_lists_to_single_lines() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: instructions for wooing fair maidens")
+    let commits = vec![
+CommitBuilder::new("feat: instructions for wooing fair maidens")
             .with_body(
                 "When wooing a lady of quality, attend to these principles with utmost care and devotion:
 
@@ -323,15 +270,15 @@ fn unwraps_numbered_lists_to_single_lines() {
 2. Second, present tokens of affection such as posies of flowers gathered from the fairest gardens in the realm
 3. Third, demonstrate thy valour and honour through noble deeds that shall be sung by minstrels across the land",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -344,11 +291,8 @@ fn unwraps_numbered_lists_to_single_lines() {
 
 #[test]
 fn preserves_code_blocks_without_wrapping() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: add theatrical script formatting")
+    let commits = vec![
+CommitBuilder::new("feat: add theatrical script formatting")
             .with_body(
                 "The script format preserves the playwright's original line formatting without alteration:
 
@@ -359,15 +303,15 @@ OPHELIA: Good my lord, how does your honour for this many a day?
 
 These lines must maintain their integrity as written by the immortal bard.",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -380,23 +324,20 @@ These lines must maintain their integrity as written by the immortal bard.",
 
 #[test]
 fn preserves_indented_code_blocks() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: add indented example")
+    let commits = vec![
+CommitBuilder::new("feat: add indented example")
             .with_body(
                 "    HAMLET: To be, or not to be, that is the question.\n    OPHELIA: Good my lord, how does your honour for this many a day?",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -409,23 +350,20 @@ fn preserves_indented_code_blocks() {
 
 #[test]
 fn preserves_tab_indented_code_blocks() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: add tab indented example")
+    let commits = vec![
+CommitBuilder::new("feat: add tab indented example")
             .with_body(
                 "\tHAMLET: To be, or not to be, that is the question.\n\tOPHELIA: Good my lord, how does your honour for this many a day?",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -438,30 +376,25 @@ fn preserves_tab_indented_code_blocks() {
 
 #[test]
 fn handles_mixed_prose_and_indented_code_block() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: document the soliloquy")
-                .with_body(
-                    "The famous soliloquy in its original indented form:
+    let commits = vec![
+        CommitBuilder::new("feat: document the soliloquy")
+            .with_body(
+                "The famous soliloquy in its original indented form:
 
     HAMLET: To be, or not to be, that is the question.
     OPHELIA: Good my lord, how does your honour for this many a day?
 
 The lines above must be preserved exactly as written.",
-                )
-                .build(),
-        ],
-    );
+            )
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -474,11 +407,8 @@ The lines above must be preserved exactly as written.",
 
 #[test]
 fn preserves_block_quotes_as_is() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: add wisdom from the bard")
+    let commits = vec![
+CommitBuilder::new("feat: add wisdom from the bard")
             .with_body(
                 "From the great playwright's most celebrated work on the nature of existence:
 
@@ -486,15 +416,15 @@ fn preserves_block_quotes_as_is() {
 
 This soliloquy explores the fundamental nature of human existence and mortality.",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -507,11 +437,8 @@ This soliloquy explores the fundamental nature of human existence and mortality.
 
 #[test]
 fn handles_mixed_structured_content() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![CommitBuilder::new("feat: comprehensive guide to staging Hamlet")
+    let commits = vec![
+CommitBuilder::new("feat: comprehensive guide to staging Hamlet")
             .with_body(
                 "This production combines the traditional elements of Elizabethan theatre with modern interpretations:
 
@@ -537,15 +464,15 @@ HORATIO: He waxes desperate with imagination.
 
 Additional context on Elizabethan staging conventions is essential for authentic production.",
             )
-            .build()],
-    );
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -558,13 +485,9 @@ Additional context on Elizabethan staging conventions is essential for authentic
 
 #[test]
 fn generates_no_release_note_when_no_commits() {
-    let by_category = HashMap::new();
-    let categorized = CategorizedCommits {
-        by_category,
-        contributors: Vec::new(),
-    };
+    let analyzed = CommitAnalyzer::analyze(&[]);
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -576,13 +499,70 @@ fn generates_no_release_note_when_no_commits() {
 }
 
 #[test]
-fn excludes_git_trailers() {
-    let mut by_category = HashMap::new();
+fn custom_template_renders_section_from_type_and_scope() {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("fix(security): the devil can cite scripture for his purpose").build(),
+        CommitBuilder::new("fix: the fault, dear Brutus, is not in our stars").build(),
+        CommitBuilder::new("feat(security): men at some time are masters of their fates").build(),
+    ]);
 
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: the lady doth protest too much, methinks")
+    let template = r#"{%- set security = commits | typed(include="fix") | scoped(include="security") -%}
+## Security
+{% for commit in security %}- {{ commit.description }}
+{% endfor %}"#;
+
+    let result = markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        template,
+    )
+    .unwrap();
+
+    assert_eq!(
+        result,
+        "## Security
+- the devil can cite scripture for his purpose
+"
+    );
+}
+
+#[test]
+fn exposes_flat_commits_to_template() {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("feat: love all, trust a few, do wrong to none").build(),
+        CommitBuilder::new("chore(deps): all that glisters is not gold").build(),
+        CommitBuilder::new("fix!: some rise by sin, and some by virtue fall").build(),
+        CommitBuilder::new("build(api): if music be the food of love, play on").build(),
+    ]);
+
+    let template = r#"{% for commit in commits %}{{ commit.type }}|{{ commit.scope }}|{{ commit.breaking }}|{{ commit.description }}
+{% endfor %}"#;
+
+    let result = markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        template,
+    )
+    .unwrap();
+
+    assert_eq!(
+        result,
+        "feat||false|love all, trust a few, do wrong to none
+chore|deps|false|all that glisters is not gold
+fix||true|some rise by sin, and some by virtue fall
+build|api|false|if music be the food of love, play on
+"
+    );
+}
+
+#[test]
+fn excludes_git_trailers() {
+    let commits = vec![
+CommitBuilder::new("feat: the lady doth protest too much, methinks")
                 .with_body("Though this be madness, yet there is method in't.")
                 .with_trailer("Signed-off-by", "William Shakespeare <will@globe-theatre.com>")
                 .with_trailer("Co-authored-by", "Christopher Marlowe <kit@rose-theatre.com>")
@@ -591,25 +571,18 @@ fn excludes_git_trailers() {
                 .with_body("To be, or not to be, that is the question:\n- Whether 'tis nobler in the mind to suffer\n- The slings and arrows of outrageous fortune\n\nOr to take arms against a sea of troubles.")
                 .with_trailer("Reviewed-by", "Ben Jonson <ben@theatre.com>")
                 .build(),
-        ],
-    );
-
-    by_category.insert(
-        CommitCategory::Fix,
-        vec![
-            CommitBuilder::new("fix: something is rotten in the state of Denmark")
+CommitBuilder::new("fix: something is rotten in the state of Denmark")
                 .with_body("The rest is silence.")
                 .with_trailer("Acked-by", "Hamlet <hamlet@elsinore.dk>")
                 .build(),
-        ],
-    );
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -622,19 +595,14 @@ fn excludes_git_trailers() {
 
 #[test]
 fn displays_multiple_contributors() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: we are such stuff as dreams are made on")
-                .with_contributors(vec!["shakespeare", "marlowe", "jonson"])
-                .build(),
-            CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
-                .with_contributor("shakespeare")
-                .build(),
-        ],
-    );
+    let commits = vec![
+        CommitBuilder::new("feat: we are such stuff as dreams are made on")
+            .with_contributors(vec!["shakespeare", "marlowe", "jonson"])
+            .build(),
+        CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
+            .with_contributor("shakespeare")
+            .build(),
+    ];
 
     let contributors = vec![
         ContributorSummary {
@@ -666,12 +634,12 @@ fn displays_multiple_contributors() {
         },
     ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors,
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -684,19 +652,14 @@ fn displays_multiple_contributors() {
 
 #[test]
 fn filters_bot_contributors() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: the course of true love never did run smooth")
-                .with_contributor("shakespeare")
-                .build(),
-            CommitBuilder::new("feat: a plague o' both your houses")
-                .with_contributor_bot("iago[bot]")
-                .build(),
-        ],
-    );
+    let commits = vec![
+        CommitBuilder::new("feat: the course of true love never did run smooth")
+            .with_contributor("shakespeare")
+            .build(),
+        CommitBuilder::new("feat: a plague o' both your houses")
+            .with_contributor_bot("iago[bot]")
+            .build(),
+    ];
 
     let contributors = vec![
         ContributorSummary {
@@ -719,12 +682,12 @@ fn filters_bot_contributors() {
         },
     ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors,
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -737,21 +700,16 @@ fn filters_bot_contributors() {
 
 #[test]
 fn ai_contributors_have_no_commit_links() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: the course of true love never did run smooth")
-                .with_contributor("shakespeare")
-                .with_timestamp(1748390400)
-                .build(),
-            CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
-                .with_contributor("claude")
-                .with_timestamp(1748476800)
-                .build(),
-        ],
-    );
+    let commits = vec![
+        CommitBuilder::new("feat: the course of true love never did run smooth")
+            .with_contributor("shakespeare")
+            .with_timestamp(1748390400)
+            .build(),
+        CommitBuilder::new("feat: some Cupid kills with arrows, some with traps")
+            .with_contributor("claude")
+            .with_timestamp(1748476800)
+            .build(),
+    ];
 
     let contributors = vec![
         ContributorSummary {
@@ -782,12 +740,12 @@ fn ai_contributors_have_no_commit_links() {
         token: None,
     };
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors,
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &platform,
         "v1.0.0",
         TEST_RELEASE_DATE,
@@ -800,14 +758,10 @@ fn ai_contributors_have_no_commit_links() {
 
 #[test]
 fn preserves_tables_without_unwrapping() {
-    let mut by_category = HashMap::new();
-
-    by_category.insert(
-        CommitCategory::Feature,
-        vec![
-            CommitBuilder::new("feat: add comparison of Shakespeare's great tragedies")
-                .with_body(
-                    "This feature adds a comprehensive overview of the four great tragedies, \
+    let commits = vec![
+        CommitBuilder::new("feat: add comparison of Shakespeare's great tragedies")
+            .with_body(
+                "This feature adds a comprehensive overview of the four great tragedies, \
 allowing users to compare key elements across these masterworks of \
 Elizabethan drama.
 
@@ -821,17 +775,16 @@ Elizabethan drama.
 Each tragedy explores the downfall of a noble figure through their own \
 weaknesses, reflecting the Aristotelian concept of hamartia that \
 Shakespeare so masterfully employed.",
-                )
-                .build(),
-        ],
-    );
+            )
+            .build(),
+    ];
 
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -844,23 +797,18 @@ Shakespeare so masterfully employed.",
 
 #[test]
 fn escapes_table_metacharacters_in_dependency_update_cell() {
-    let mut by_category = HashMap::new();
+    let commits = vec![
+        CommitBuilder::new("fix(deps): bump foo | bar from 1.0.0 to 2.0.0")
+            .with_contributor_bot("renovate[bot]")
+            .build(),
+    ];
 
-    by_category.insert(
-        CommitCategory::Dependencies,
-        vec![
-            CommitBuilder::new("fix(deps): bump foo | bar from 1.0.0 to 2.0.0")
-                .with_contributor_bot("renovate[bot]")
-                .build(),
-        ],
-    );
-
-    let categorized = CategorizedCommits {
-        by_category,
+    let analyzed = AnalyzedCommits {
         contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&commits)
     };
     let result = markdown::render_history(
-        &categorized,
+        &analyzed,
         &Platform::Unknown,
         "HEAD",
         TEST_RELEASE_DATE,
@@ -869,4 +817,85 @@ fn escapes_table_metacharacters_in_dependency_update_cell() {
     .unwrap();
 
     insta::assert_snapshot!(result);
+}
+
+fn render_descriptions(template: &str) -> String {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("feat(api): love all, trust a few, do wrong to none").build(),
+        CommitBuilder::new("Fix: some rise by sin, and some by virtue fall").build(),
+        CommitBuilder::new("chore(deps): all that glisters is not gold").build(),
+        CommitBuilder::new("fix(DEPS): the better part of valor is discretion").build(),
+        CommitBuilder::new("there is a tide in the affairs of men").build(),
+    ]);
+
+    markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "HEAD",
+        TEST_RELEASE_DATE,
+        template,
+    )
+    .unwrap()
+}
+
+#[test]
+fn typed_filter_includes_matching_types() {
+    let result = render_descriptions(
+        r#"{% for commit in commits | typed(include=["feat", "FIX"]) %}{{ commit.description }}
+{% endfor %}"#,
+    );
+
+    assert_eq!(
+        result,
+        "love all, trust a few, do wrong to none
+some rise by sin, and some by virtue fall
+the better part of valor is discretion
+"
+    );
+}
+
+#[test]
+fn typed_filter_excludes_matching_types() {
+    let result = render_descriptions(
+        r#"{% for commit in commits | typed(exclude="fix") %}{{ commit.description }}
+{% endfor %}"#,
+    );
+
+    assert_eq!(
+        result,
+        "love all, trust a few, do wrong to none
+all that glisters is not gold
+there is a tide in the affairs of men
+"
+    );
+}
+
+#[test]
+fn scoped_filter_includes_matching_scopes() {
+    let result = render_descriptions(
+        r#"{% for commit in commits | scoped(include="deps") %}{{ commit.description }}
+{% endfor %}"#,
+    );
+
+    assert_eq!(
+        result,
+        "all that glisters is not gold
+the better part of valor is discretion
+"
+    );
+}
+
+#[test]
+fn scoped_filter_excludes_matching_scopes() {
+    let result = render_descriptions(
+        r#"{% for commit in commits | typed(include=["feat", "fix"]) | scoped(exclude=["Deps"]) %}{{ commit.description }}
+{% endfor %}"#,
+    );
+
+    assert_eq!(
+        result,
+        "love all, trust a few, do wrong to none
+some rise by sin, and some by virtue fall
+"
+    );
 }

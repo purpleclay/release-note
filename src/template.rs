@@ -20,6 +20,14 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endif -%}
 {%- endmacro contributor_link -%}
 
+{%- set breaking = commits | filter(attribute="breaking", value=true) -%}
+{%- set non_breaking = commits | filter(attribute="breaking", value=false) -%}
+{%- set dependencies = non_breaking | scoped(include="deps") -%}
+{%- set changes = non_breaking | scoped(exclude="deps") -%}
+{%- set features = changes | typed(include="feat") -%}
+{%- set fixes = changes | typed(include="fix") -%}
+{%- set perf = changes | typed(include="perf") -%}
+
 ## {{ git_ref }} - {{ release_date | date(format="%B %d, %Y") }}
 
 {%- set stats = [] -%}
@@ -66,7 +74,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -77,7 +85,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -88,7 +96,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -99,7 +107,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if perf %}
 ## Performance Improvements
 {%- for commit in perf %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.first_line | strip_conventional_prefix }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
@@ -113,7 +121,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 | Commit | Update | Contributors |
 |--------|--------|--------------|
 {%- for commit in dependencies %}
-| {{ commit_url(sha = commit.hash) }} | {{ commit.first_line | strip_conventional_prefix | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(sep=", ") }}{% endif %} |
+| {{ commit_url(sha = commit.hash) }} | {{ commit.description | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(sep=", ") }}{% endif %} |
 {%- endfor %}
 
 {%- endif %}

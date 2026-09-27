@@ -1,6 +1,7 @@
 use anyhow::Result;
-use git2::{Oid, Repository, Signature, Time};
+use git2::{ObjectType, Oid, Repository, Signature, Time};
 use release_note::git::{GitRepo, GitTrailer};
+use std::collections::HashMap;
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -161,7 +162,7 @@ fn includes_entire_history_on_first_release() -> Result<()> {
     )?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 3);
     assert_eq!(
@@ -230,7 +231,7 @@ Thou canst not then be false to any man."#;
     test_repo.commit(message)?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 1);
     assert_eq!(
@@ -273,7 +274,7 @@ fn includes_history_between_existing_releases() -> Result<()> {
     )?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(Some("v3.0.0".to_string()), None)?;
+    let commits = git_repo.history(Some("v3.0.0".to_string()), None)?.commits;
 
     assert_eq!(commits.len(), 1);
     assert_eq!(
@@ -294,7 +295,7 @@ fn includes_history_from_head_until_first_release() -> Result<()> {
     )?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 2);
     assert_eq!(
@@ -319,7 +320,7 @@ fn includes_history_from_commit_until_latest_release() -> Result<()> {
 
     let git_repo = GitRepo::open(test_repo.path())?;
     let c2_hash = test_repo.commits[1].to_string();
-    let commits = git_repo.history(Some(c2_hash), None)?;
+    let commits = git_repo.history(Some(c2_hash), None)?.commits;
 
     assert_eq!(commits.len(), 1);
     assert_eq!(
@@ -342,7 +343,7 @@ fn auto_detection_ignores_non_semver_tags() -> Result<()> {
     )?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 3);
     assert_eq!(
@@ -369,7 +370,7 @@ fn auto_detection_supports_v_prefixed_semver_tags() -> Result<()> {
     )?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(Some("v2.0.0".to_string()), None)?;
+    let commits = git_repo.history(Some("v2.0.0".to_string()), None)?.commits;
 
     assert_eq!(commits.len(), 1);
     assert_eq!(
@@ -392,7 +393,9 @@ fn auto_detection_supports_path_prefixed_semver_tags() -> Result<()> {
 
     let git_repo = GitRepo::open(test_repo.path())?;
 
-    let commits = git_repo.history(Some("component/sub/v0.2.0".to_string()), None)?;
+    let commits = git_repo
+        .history(Some("component/sub/v0.2.0".to_string()), None)?
+        .commits;
     assert_eq!(commits.len(), 1);
     assert_eq!(commits[0].first_line, "What is past is prologue");
 
@@ -417,7 +420,7 @@ fn auto_detection_only_considers_tags_at_path_within_repository() -> Result<()> 
     let search_dir = test_repo.path().join("search");
     let git_repo = GitRepo::open(&search_dir)?;
 
-    let commits = git_repo.history(Some("v2.0.0".to_string()), None)?;
+    let commits = git_repo.history(Some("v2.0.0".to_string()), None)?.commits;
     assert_eq!(commits.len(), 2);
     assert_eq!(
         commits[0].first_line,
@@ -444,7 +447,7 @@ fn only_includes_history_at_path_within_repository() -> Result<()> {
     let components_dir = test_repo.path().join("src/components");
     let git_repo = GitRepo::open(&components_dir)?;
 
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
     assert_eq!(commits.len(), 2);
     assert_eq!(commits[0].first_line, "To be or not to be");
     assert_eq!(commits[1].first_line, "But thinking makes it so");
@@ -468,7 +471,7 @@ Co-authored-by: Christopher Marlowe <kit@rose-theatre.com>
     test_repo.commit(message)?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 1);
     assert_eq!(commits[0].first_line, "feat: all the world's a stage");
@@ -509,7 +512,7 @@ Signed-off-by: William Shakespeare <will@globe-theatre.com>"#;
     test_repo.commit(message)?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 1);
     assert_eq!(
@@ -555,7 +558,7 @@ Co-authored-by: Christopher Marlowe <kit@rose-theatre.com>"#;
     test_repo.commit(message)?;
 
     let git_repo = GitRepo::open(test_repo.path())?;
-    let commits = git_repo.history(None, None)?;
+    let commits = git_repo.history(None, None)?.commits;
 
     assert_eq!(commits.len(), 1);
 
@@ -594,5 +597,140 @@ performance, mirroring reality back to the audience."#
         _ => panic!("Expected CoAuthoredBy trailer"),
     }
 
+    Ok(())
+}
+
+fn short_sha(oid: &Oid) -> String {
+    oid.to_string()[..7].to_string()
+}
+
+#[test]
+fn resolves_range_between_existing_releases() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        (tag: v3.0.0) To be, or not to be, that is the question
+        (tag: v2.0.0) All the world's a stage
+        (tag: v1.0.0) What's in a name? That which we call a rose
+    ",
+    )?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let range = git_repo.history(Some("v3.0.0".to_string()), None)?.range;
+
+    assert_eq!(range.from, "v3.0.0");
+    assert_eq!(range.to.as_deref(), Some("v2.0.0"));
+    Ok(())
+}
+
+#[test]
+fn resolves_range_from_tagged_head() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        (tag: v2.0.0) All the world's a stage
+        (tag: v1.0.0) What's in a name? That which we call a rose
+    ",
+    )?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let range = git_repo.history(None, None)?.range;
+
+    assert_eq!(range.from, "v2.0.0");
+    assert_eq!(range.to.as_deref(), Some("v1.0.0"));
+    Ok(())
+}
+
+#[test]
+fn resolves_range_from_untagged_head_to_latest_release() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        The course of true love never did run smooth
+        (tag: 1.0.0) Cowards die many times before their deaths
+    ",
+    )?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let range = git_repo.history(None, None)?.range;
+
+    assert_eq!(range.from, short_sha(&test_repo.commits[1]));
+    assert_eq!(range.to.as_deref(), Some("1.0.0"));
+    Ok(())
+}
+
+#[test]
+fn resolves_range_with_explicit_to() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        (tag: v3.0.0) To be, or not to be, that is the question
+        (tag: v2.0.0) All the world's a stage
+        Though this be madness, yet there is method in't
+        (tag: v1.0.0) What's in a name? That which we call a rose
+    ",
+    )?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+
+    let range = git_repo
+        .history(Some("v3.0.0".to_string()), Some("v1.0.0".to_string()))?
+        .range;
+    assert_eq!(range.to.as_deref(), Some("v1.0.0"));
+
+    let untagged = test_repo.commits[1].to_string();
+    let range = git_repo
+        .history(Some("v3.0.0".to_string()), Some(untagged))?
+        .range;
+    assert_eq!(range.to, Some(short_sha(&test_repo.commits[1])));
+    Ok(())
+}
+
+#[test]
+fn resolves_range_without_previous_release() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        The better part of valor is discretion
+        Lord, what fools these mortals be!
+    ",
+    )?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let range = git_repo.history(None, None)?.range;
+
+    assert_eq!(range.from, short_sha(&test_repo.commits[1]));
+    assert_eq!(range.to, None);
+    Ok(())
+}
+
+#[test]
+fn resolves_untagged_ref_to_an_unambiguous_abbreviation() -> Result<()> {
+    let test_repo =
+        TestRepo::from_log("(tag: v1.0.0) What's in a name? That which we call a rose")?;
+    let parent = test_repo.repo.find_commit(test_repo.commits[0])?;
+    let signature = format!("{TEST_USER_NAME} <{TEST_USER_EMAIL}> {BASE_TIMESTAMP} +0000");
+
+    let commit_object = |n: usize| {
+        format!(
+            "tree {}\nparent {}\nauthor {signature}\ncommitter {signature}\n\nThe rest is silence {n}\n",
+            parent.tree_id(),
+            parent.id(),
+        )
+    };
+
+    // Search for two commits whose IDs share the same seven-character prefix
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    let (first, second) = (0..)
+        .find_map(|n| {
+            let oid = Oid::hash_object(ObjectType::Commit, commit_object(n).as_bytes()).ok()?;
+            seen.insert(oid.to_string()[..7].to_string(), n)
+                .map(|m| (m, n))
+        })
+        .unwrap();
+
+    let odb = test_repo.repo.odb()?;
+    let target = odb.write(ObjectType::Commit, commit_object(first).as_bytes())?;
+    odb.write(ObjectType::Commit, commit_object(second).as_bytes())?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let range = git_repo.history(Some(target.to_string()), None)?.range;
+
+    assert_eq!(test_repo.repo.revparse_single(&range.from)?.id(), target);
     Ok(())
 }

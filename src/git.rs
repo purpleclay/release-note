@@ -109,6 +109,17 @@ impl GitTrailer {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReleaseRange {
+    pub from: String,
+    pub to: Option<String>,
+}
+
+pub struct History {
+    pub range: ReleaseRange,
+    pub commits: Vec<Commit>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct LinkedIssue {
     pub number: u32,
@@ -387,7 +398,7 @@ impl GitRepo {
             .collect())
     }
 
-    pub fn history(&self, from: Option<String>, to: Option<String>) -> Result<Vec<Commit>> {
+    pub fn history(&self, from: Option<String>, to: Option<String>) -> Result<History> {
         let tags = Self::load_tags_sorted(&self.repo)?;
 
         let tag_index: HashMap<Oid, usize> = tags
@@ -473,6 +484,18 @@ impl GitRepo {
             to_ref.map_or_else(|| "".to_string(), |v| format!(" to {}", v)),
         );
 
+        let ref_name = |oid: Oid| -> Result<String> {
+            if let Some(tag) = tags.iter().find(|t| t.oid == oid) {
+                return Ok(tag.name.clone());
+            }
+            let short_id = self.repo.find_object(oid, None)?.short_id()?;
+            Ok(short_id.as_str().unwrap_or_default().to_string())
+        };
+        let range = ReleaseRange {
+            from: ref_name(from_oid)?,
+            to: to_oid.map(ref_name).transpose()?,
+        };
+
         if let Some(ref path) = self.path_filter {
             log::info!("filtering commits to path: {}", path.display());
         }
@@ -504,7 +527,7 @@ impl GitRepo {
 
             commits.push(Commit::from_git2_commit(&git_commit));
         }
-        Ok(commits)
+        Ok(History { range, commits })
     }
 
     fn find_closest_tag(

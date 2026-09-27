@@ -125,6 +125,11 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endfor %}
 
 {%- endif %}
+{%- set compare = compare_url() %}
+{%- if compare %}
+
+**Full Changelog**: [`{{ to_ref }}...{{ from_ref }}`]({{ compare }})
+{%- endif %}
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*"#;
 

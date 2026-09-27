@@ -2,12 +2,20 @@ mod commit;
 
 use commit::CommitBuilder;
 use release_note::analyzer::{AnalyzedCommits, CommitAnalyzer, ContributorSummary};
+use release_note::git::ReleaseRange;
 use release_note::markdown;
 use release_note::platform::Platform;
 use release_note::template::DEFAULT_TEMPLATE;
 
 // Fixed timestamp for tests: November 27, 2025 00:00:00 UTC
 const TEST_RELEASE_DATE: i64 = 1764201600;
+
+fn first_release() -> ReleaseRange {
+    ReleaseRange {
+        from: "HEAD".to_string(),
+        to: None,
+    }
+}
 
 #[test]
 fn generates_release_note_from_multiple_categories() {
@@ -47,6 +55,7 @@ fn generates_release_note_from_multiple_categories() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -71,6 +80,7 @@ fn includes_chore_deps_commits_in_dependency_table() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -132,6 +142,7 @@ fn displays_contributors_with_github_commit_links() {
         &analyzed,
         &platform,
         "v1.0.0",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -183,6 +194,7 @@ fn displays_contributors_without_links_for_gitlab() {
         &analyzed,
         &platform,
         "v1.0.0",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -217,6 +229,7 @@ the attribute to awe and majesty.",
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -251,6 +264,7 @@ That is the last scene of all, that ends this strange eventful history.",
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -281,6 +295,7 @@ CommitBuilder::new("feat: instructions for wooing fair maidens")
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -314,6 +329,7 @@ These lines must maintain their integrity as written by the immortal bard.",
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -340,6 +356,7 @@ CommitBuilder::new("feat: add indented example")
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -366,6 +383,7 @@ CommitBuilder::new("feat: add tab indented example")
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -397,6 +415,7 @@ The lines above must be preserved exactly as written.",
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -427,6 +446,7 @@ This soliloquy explores the fundamental nature of human existence and mortality.
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -475,6 +495,7 @@ Additional context on Elizabethan staging conventions is essential for authentic
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -490,6 +511,7 @@ fn generates_no_release_note_when_no_commits() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -515,6 +537,7 @@ fn custom_template_renders_section_from_type_and_scope() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         template,
     )
@@ -544,6 +567,7 @@ fn exposes_flat_commits_to_template() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         template,
     )
@@ -585,6 +609,7 @@ CommitBuilder::new("fix: something is rotten in the state of Denmark")
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -642,6 +667,7 @@ fn displays_multiple_contributors() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -690,6 +716,7 @@ fn filters_bot_contributors() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -748,6 +775,7 @@ fn ai_contributors_have_no_commit_links() {
         &analyzed,
         &platform,
         "v1.0.0",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -787,6 +815,7 @@ Shakespeare so masterfully employed.",
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -811,6 +840,7 @@ fn escapes_table_metacharacters_in_dependency_update_cell() {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         DEFAULT_TEMPLATE,
     )
@@ -832,6 +862,7 @@ fn render_descriptions(template: &str) -> String {
         &analyzed,
         &Platform::Unknown,
         "HEAD",
+        &first_release(),
         TEST_RELEASE_DATE,
         template,
     )
@@ -898,4 +929,181 @@ fn scoped_filter_excludes_matching_scopes() {
 some rise by sin, and some by virtue fall
 "
     );
+}
+
+fn github() -> Platform {
+    Platform::GitHub {
+        url: "https://github.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://api.github.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        token: None,
+    }
+}
+
+fn gitlab() -> Platform {
+    Platform::GitLab {
+        url: "https://gitlab.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://gitlab.com/api/v4".to_string(),
+        graphql_url: "https://gitlab.com/api/graphql".to_string(),
+        project_path: "shakespeare/globe-theatre".to_string(),
+        token: None,
+    }
+}
+
+fn release_range(from: &str, to: &str) -> ReleaseRange {
+    ReleaseRange {
+        from: from.to_string(),
+        to: Some(to.to_string()),
+    }
+}
+
+#[test]
+fn renders_full_changelog_trailer_for_github() {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("feat: all the world's a stage").build(),
+        CommitBuilder::new("fix: though she be but little, she is fierce").build(),
+    ]);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &github(),
+        "v2.0.0",
+        &release_range("v2.0.0", "v1.0.0"),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn renders_full_changelog_trailer_after_dependency_table_for_gitlab() {
+    let analyzed = AnalyzedCommits {
+        contributors: Vec::new(),
+        ..CommitAnalyzer::analyze(&[
+            CommitBuilder::new("feat: all the world's a stage").build(),
+            CommitBuilder::new("chore(deps): bump serde to 1.0.200")
+                .with_contributor_bot("renovate[bot]")
+                .build(),
+        ])
+    };
+
+    let result = markdown::render_history(
+        &analyzed,
+        &gitlab(),
+        "v2.0.0",
+        &release_range("v2.0.0", "v1.0.0"),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn omits_full_changelog_trailer_without_previous_release() {
+    let analyzed =
+        CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &github(),
+        "v1.0.0",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    assert!(!result.contains("Full Changelog"));
+}
+
+#[test]
+fn omits_full_changelog_trailer_for_unknown_platform() {
+    let analyzed =
+        CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "v2.0.0",
+        &release_range("v2.0.0", "v1.0.0"),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    assert!(!result.contains("Full Changelog"));
+}
+
+#[test]
+fn exposes_release_range_and_compare_url_to_template() {
+    let analyzed =
+        CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
+
+    let template = r#"{{ from_ref }}|{{ to_ref }}
+{{ compare_url() }}
+{{ compare_url(from="v3.0.0") }}
+{{ compare_url(to="v0.1.0") }}"#;
+
+    let result = markdown::render_history(
+        &analyzed,
+        &github(),
+        "v2.0.0",
+        &release_range("v2.0.0", "v1.0.0"),
+        TEST_RELEASE_DATE,
+        template,
+    )
+    .unwrap();
+
+    assert_eq!(
+        result,
+        "v2.0.0|v1.0.0
+https://github.com/shakespeare/globe-theatre/compare/v1.0.0...v2.0.0
+https://github.com/shakespeare/globe-theatre/compare/v1.0.0...v3.0.0
+https://github.com/shakespeare/globe-theatre/compare/v0.1.0...v2.0.0"
+    );
+}
+
+#[test]
+fn compare_url_is_null_without_previous_release() {
+    let analyzed =
+        CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
+
+    let template = r#"{% set url = compare_url() %}{% if url %}{{ url }}{% else %}none{% endif %}"#;
+
+    let result = markdown::render_history(
+        &analyzed,
+        &github(),
+        "v1.0.0",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        template,
+    )
+    .unwrap();
+
+    assert_eq!(result, "none");
+}
+
+#[test]
+fn full_changelog_trailer_survives_markdown_characters_in_refs() {
+    let analyzed =
+        CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &github(),
+        "act_]/v2.0.0",
+        &release_range("act_]/v2.0.0", "act_]/v1.0.0"),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    assert!(result.contains(
+        "**Full Changelog**: [`act_]/v1.0.0...act_]/v2.0.0`](https://github.com/shakespeare/globe-theatre/compare/act_%5D/v1.0.0...act_%5D/v2.0.0)"
+    ));
 }

@@ -1,4 +1,4 @@
-use crate::{analyzer::AnalyzedCommits, platform::Platform};
+use crate::{analyzer::AnalyzedCommits, git::ReleaseRange, platform::Platform};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -240,8 +240,33 @@ fn table_escape_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::R
     Ok(Value::String(text.replace('|', "\\|")))
 }
 
-fn register_platform_functions(tera: &mut tera::Tera, git_ref: &str, platform: &Platform) {
+fn register_platform_functions(
+    tera: &mut tera::Tera,
+    git_ref: &str,
+    range: &ReleaseRange,
+    platform: &Platform,
+) {
     let platform = platform.clone();
+
+    tera.register_function("compare_url", {
+        let platform = platform.clone();
+        let range = range.clone();
+        move |args: &HashMap<String, Value>| -> tera::Result<Value> {
+            let from = args
+                .get("from")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&range.from);
+            let to = args
+                .get("to")
+                .and_then(|v| v.as_str())
+                .or(range.to.as_deref());
+
+            match to.and_then(|to| platform.compare_url(to, from)) {
+                Some(url) => Ok(Value::String(url)),
+                None => Ok(Value::Null),
+            }
+        }
+    });
 
     tera.register_function("commit_url", {
         let platform = platform.clone();
@@ -282,6 +307,7 @@ pub fn render_history(
     analyzed: &AnalyzedCommits,
     platform: &Platform,
     git_ref: &str,
+    range: &ReleaseRange,
     release_date: i64,
     template: &str,
 ) -> Result<String> {
@@ -299,12 +325,14 @@ pub fn render_history(
     tera.register_filter("scoped", scoped_filter);
     tera.register_filter("table_escape", table_escape_filter);
 
-    register_platform_functions(&mut tera, git_ref, platform);
+    register_platform_functions(&mut tera, git_ref, range, platform);
 
     let mut context = tera::Context::new();
     context.insert("commits", &analyzed.commits);
     context.insert("contributors", &analyzed.contributors);
     context.insert("git_ref", git_ref);
+    context.insert("from_ref", &range.from);
+    context.insert("to_ref", &range.to);
     context.insert("release_date", &release_date);
 
     let rendered = tera

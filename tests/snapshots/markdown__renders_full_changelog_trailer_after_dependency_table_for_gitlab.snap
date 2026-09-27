@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## v2.0.0 - November 27, 2025
+
+[**`1`**](#new-features) new feature
+
+## New Features
+- [**`8c8a505`**](https://gitlab.com/shakespeare/globe-theatre/-/commit/8c8a505c3365cb6c8c8a505c3365cb6c8c8a505c) all the world's a stage
+## Dependency Updates
+
+| Commit | Update | Contributors |
+|--------|--------|--------------|
+| [**`9b7775b`**](https://gitlab.com/shakespeare/globe-theatre/-/commit/9b7775bdb4d787c19b7775bdb4d787c19b7775bd) | bump serde to 1.0.200 | @renovate[bot] |
+
+**Full Changelog**: [`v1.0.0...v2.0.0`](https://gitlab.com/shakespeare/globe-theatre/-/compare/v1.0.0...v2.0.0)
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

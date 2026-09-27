@@ -257,6 +257,15 @@ impl Platform {
         }
     }
 
+    pub fn compare_url(&self, base: &str, head: &str) -> Option<String> {
+        let (base, head) = (encode_ref(base), encode_ref(head));
+        match self {
+            Platform::GitHub { url, .. } => Some(format!("{}/compare/{}...{}", url, base, head)),
+            Platform::GitLab { url, .. } => Some(format!("{}/-/compare/{}...{}", url, base, head)),
+            Platform::Unknown => None,
+        }
+    }
+
     pub fn commits_url(
         &self,
         git_ref: &str,
@@ -267,11 +276,25 @@ impl Platform {
         match self {
             Platform::GitHub { url, .. } => Some(format!(
                 "{}/commits/{}?author={}&since={}&until={}",
-                url, git_ref, author, since, until
+                url,
+                encode_ref(git_ref),
+                author,
+                since,
+                until
             )),
             _ => None,
         }
     }
+}
+
+// Percent-encodes a git ref for use in a URL path, keeping `/` so that
+// path-prefixed tags such as `component/v1.0.0` stay readable.
+fn encode_ref(git_ref: &str) -> String {
+    git_ref
+        .split('/')
+        .map(|segment| urlencoding::encode(segment))
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn is_trusted_host(host: &str, trusted_hosts: &[String]) -> bool {

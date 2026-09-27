@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use release_note::analyzer::CommitAnalyzer;
 use release_note::contributor;
-use release_note::git::GitRepo;
+use release_note::git::{GitRepo, History};
 use release_note::markdown;
 use release_note::template::TemplateResolver;
 
@@ -80,7 +80,10 @@ fn main() -> Result<()> {
     let template = TemplateResolver::new(args.path.clone()).resolve()?;
 
     let repo = GitRepo::open(&args.path)?;
-    let mut history = repo.history(args.from.clone(), args.to.clone())?;
+    let History {
+        range,
+        commits: mut history,
+    } = repo.history(args.from.clone(), args.to.clone())?;
 
     let git_ref = args.from.clone().map(Ok).unwrap_or_else(|| {
         repo.current_ref()
@@ -102,7 +105,14 @@ fn main() -> Result<()> {
 
     println!(
         "{}",
-        markdown::render_history(&analyzed, &platform, &git_ref, release_date, &template)?
+        markdown::render_history(
+            &analyzed,
+            &platform,
+            &git_ref,
+            &range,
+            release_date,
+            &template
+        )?
     );
     Ok(())
 }

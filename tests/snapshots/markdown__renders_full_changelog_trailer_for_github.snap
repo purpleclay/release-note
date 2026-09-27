@@ -1,0 +1,16 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## v2.0.0 - November 27, 2025
+
+[**`1`**](#new-features) new feature • [**`1`**](#bug-fixes) bug fixed
+
+## New Features
+- [**`8c8a505`**](https://github.com/shakespeare/globe-theatre/commit/8c8a505c3365cb6c8c8a505c3365cb6c8c8a505c) all the world's a stage
+## Bug Fixes
+- [**`fd0ff5c`**](https://github.com/shakespeare/globe-theatre/commit/fd0ff5c9d7cd4bf9fd0ff5c9d7cd4bf9fd0ff5c9) though she be but little, she is fierce
+
+**Full Changelog**: [`v1.0.0...v2.0.0`](https://github.com/shakespeare/globe-theatre/compare/v1.0.0...v2.0.0)
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

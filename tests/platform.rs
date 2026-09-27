@@ -510,3 +510,78 @@ fn attaches_token_for_trusted_self_hosted_gitlab() {
         }
     );
 }
+
+#[test]
+fn builds_github_compare_url() {
+    let platform = Platform::GitHub {
+        url: "https://github.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://api.github.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        token: None,
+    };
+
+    assert_eq!(
+        platform.compare_url("v1.0.0", "v2.0.0"),
+        Some("https://github.com/shakespeare/globe-theatre/compare/v1.0.0...v2.0.0".to_string())
+    );
+}
+
+#[test]
+fn builds_gitlab_compare_url() {
+    let platform = Platform::GitLab {
+        url: "https://gitlab.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://gitlab.com/api/v4".to_string(),
+        graphql_url: "https://gitlab.com/api/graphql".to_string(),
+        project_path: "shakespeare/globe-theatre".to_string(),
+        token: None,
+    };
+
+    assert_eq!(
+        platform.compare_url("v1.0.0", "v2.0.0"),
+        Some("https://gitlab.com/shakespeare/globe-theatre/-/compare/v1.0.0...v2.0.0".to_string())
+    );
+}
+
+#[test]
+fn no_compare_url_for_unknown_platform() {
+    assert_eq!(Platform::Unknown.compare_url("v1.0.0", "v2.0.0"), None);
+}
+
+#[test]
+fn encodes_refs_in_compare_url() {
+    let platform = Platform::GitHub {
+        url: "https://github.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://api.github.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        token: None,
+    };
+
+    assert_eq!(
+        platform.compare_url("release#/v1.0.0", "act(1)%/v2.0.0"),
+        Some(
+            "https://github.com/shakespeare/globe-theatre/compare/release%23/v1.0.0...act%281%29%25/v2.0.0"
+                .to_string()
+        )
+    );
+}
+
+#[test]
+fn encodes_ref_in_commits_url() {
+    let platform = Platform::GitHub {
+        url: "https://github.com/shakespeare/globe-theatre".to_string(),
+        api_url: "https://api.github.com".to_string(),
+        owner: "shakespeare".to_string(),
+        repo: "globe-theatre".to_string(),
+        token: None,
+    };
+
+    assert_eq!(
+        platform.commits_url("release#/v1.0.0", "hamlet", "2025-01-01", "2025-02-01"),
+        Some(
+            "https://github.com/shakespeare/globe-theatre/commits/release%23/v1.0.0?author=hamlet&since=2025-01-01&until=2025-02-01"
+                .to_string()
+        )
+    );
+}

@@ -1107,3 +1107,27 @@ fn full_changelog_trailer_survives_markdown_characters_in_refs() {
         "**Full Changelog**: [`act_]/v1.0.0...act_]/v2.0.0`](https://github.com/shakespeare/globe-theatre/compare/act_%5D/v1.0.0...act_%5D/v2.0.0)"
     ));
 }
+
+#[test]
+fn renders_breaking_footer_from_breaking_description() {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("feat!: the course of true love never did run smooth")
+            .with_body("Lord, what fools these mortals be!\n\nBREAKING CHANGE: the lunatic, the lover and the poet")
+            .build(),
+        CommitBuilder::new("refactor!: parting is such sweet sorrow")
+            .with_trailer("BREAKING-CHANGE", "shall I compare thee to a summer's day")
+            .build(),
+    ]);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "HEAD",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}

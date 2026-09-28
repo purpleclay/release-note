@@ -33,7 +33,7 @@
         };
 
         rustToolchain = pkgs.rust-bin.stable."1.90.0".default.override {
-          extensions = ["rust-src" "cargo" "rustc" "clippy" "rustfmt"];
+          extensions = ["rust-src" "cargo" "rustc" "clippy" "rustfmt" "rust-analyzer"];
         };
 
         rustPlatform = pkgs.makeRustPlatform {

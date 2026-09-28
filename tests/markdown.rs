@@ -1131,3 +1131,34 @@ fn renders_breaking_footer_from_breaking_description() {
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn renders_breaking_description_as_important_alert() {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("feat!: the course of true love never did run smooth")
+            .with_body(
+                "Lord, what fools these mortals be!
+
+BREAKING CHANGE: Migrate the config file to the new format.
+
+```
+old = 1
+new = 2
+```",
+            )
+            .build(),
+        CommitBuilder::new("refactor!: parting is such sweet sorrow").build(),
+    ]);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "HEAD",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}

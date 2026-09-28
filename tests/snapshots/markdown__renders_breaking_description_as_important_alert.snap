@@ -12,10 +12,12 @@ expression: result
   Lord, what fools these mortals be!
 
 > [!IMPORTANT]
-> the lunatic, the lover and the poet
+> Migrate the config file to the new format.
+> 
+> ```
+> old = 1
+> new = 2
+> ```
 - **`fa1ad19`** parting is such sweet sorrow
-
-> [!IMPORTANT]
-> shall I compare thee to a summer's day
 
 *Generated with [release-note](https://github.com/purpleclay/release-note)*

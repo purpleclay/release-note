@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## HEAD - November 27, 2025
+
+[**`2`**](#breaking-changes) breaking changes
+
+## Breaking Changes
+- **`4cfa67f`** the course of true love never did run smooth
+
+  Lord, what fools these mortals be!
+
+  BREAKING CHANGE: the lunatic, the lover and the poet
+- **`fa1ad19`** parting is such sweet sorrow
+
+  BREAKING CHANGE: shall I compare thee to a summer's day
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*

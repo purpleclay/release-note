@@ -84,6 +84,13 @@ impl CommitAnalyzer {
             None
         };
 
+        if let Some(body) = &commit.body
+            && let Some(footer) = BREAKING_FOOTER.find(body)
+        {
+            let stripped = body[..footer.start()].trim_end();
+            c.body = (!stripped.is_empty()).then(|| stripped.to_string());
+        }
+
         if let Some(parsed) = parsed {
             c.description = parsed.description;
             c.scope = parsed.scope.unwrap_or_default();
@@ -108,15 +115,18 @@ impl CommitAnalyzer {
     }
 
     fn extract_breaking_description(commit: &Commit) -> Option<String> {
-        if let Some(value) = Self::find_breaking_trailer(commit) {
-            return Some(value.to_string());
-        }
-        if let Some(body) = &commit.body
-            && let Some(caps) = BREAKING_FOOTER_DESC.captures(body)
-        {
-            return caps.get(1).map(|m| m.as_str().trim().to_string());
-        }
-        None
+        let from_body = commit
+            .body
+            .as_deref()
+            .and_then(|body| BREAKING_FOOTER_DESC.captures(body))
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str().trim());
+        let from_trailer = Self::find_breaking_trailer(commit)
+            .map(str::trim)
+            .filter(|trailer| Some(*trailer) != from_body);
+
+        let descriptions: Vec<&str> = [from_body, from_trailer].into_iter().flatten().collect();
+        (!descriptions.is_empty()).then(|| descriptions.join("\n\n"))
     }
 
     fn has_breaking_footer(commit: &Commit) -> bool {

@@ -304,3 +304,70 @@ fn detects_breaking_change_trailer_with_hyphen() {
     let result = CommitAnalyzer::analyze(&[commit]);
     assert!(result.commits[0].breaking);
 }
+
+#[test]
+fn strips_breaking_footer_from_body() {
+    let commit = CommitBuilder::new("fix: the course of true love never did run smooth")
+        .with_body(
+            "Lord, what fools these mortals be!\n\nBREAKING CHANGE: with mirth and laughter let old wrinkles come\nand so the whirligig of time brings in his revenges",
+        )
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    assert_eq!(
+        result.commits[0].body.as_deref(),
+        Some("Lord, what fools these mortals be!")
+    );
+    assert_eq!(
+        result.commits[0].breaking_description.as_deref(),
+        Some(
+            "with mirth and laughter let old wrinkles come\nand so the whirligig of time brings in his revenges"
+        )
+    );
+}
+
+#[test]
+fn removes_body_when_it_only_contains_breaking_footer() {
+    let commit = CommitBuilder::new("refactor(york)!: now is the winter of our discontent")
+        .with_body("BREAKING CHANGE: made glorious summer by this sun of York.")
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    assert_eq!(result.commits[0].body, None);
+    assert_eq!(
+        result.commits[0].breaking_description.as_deref(),
+        Some("made glorious summer by this sun of York.")
+    );
+}
+
+#[test]
+fn combines_breaking_footer_in_body_with_breaking_trailer() {
+    let commit = CommitBuilder::new("feat!: the course of true love never did run smooth")
+        .with_body("Lord, what fools these mortals be!\n\nBREAKING CHANGE: migrate the config file")
+        .with_trailer("BREAKING-CHANGE", "rename the CLI flag")
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    assert_eq!(
+        result.commits[0].body.as_deref(),
+        Some("Lord, what fools these mortals be!")
+    );
+    assert_eq!(
+        result.commits[0].breaking_description.as_deref(),
+        Some("migrate the config file\n\nrename the CLI flag")
+    );
+}
+
+#[test]
+fn does_not_duplicate_identical_breaking_footer_and_trailer() {
+    let commit = CommitBuilder::new("feat!: the course of true love never did run smooth")
+        .with_body("Lord, what fools these mortals be!\n\nBREAKING CHANGE: migrate the config file")
+        .with_trailer("BREAKING-CHANGE", "migrate the config file")
+        .build();
+    let result = CommitAnalyzer::analyze(&[commit]);
+
+    assert_eq!(
+        result.commits[0].breaking_description.as_deref(),
+        Some("migrate the config file")
+    );
+}

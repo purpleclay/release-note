@@ -79,6 +79,11 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 
 {{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
 {%- endif %}
+{%- if commit.breaking_description %}
+{%- set footer = "BREAKING CHANGE: " ~ commit.breaking_description %}
+
+{{ footer | unwrap | indent(prefix = "  ", first=true) }}
+{%- endif %}
 {%- endfor %}
 
 {%- endif %}

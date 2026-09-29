@@ -734,3 +734,28 @@ fn resolves_untagged_ref_to_an_unambiguous_abbreviation() -> Result<()> {
     assert_eq!(test_repo.repo.revparse_single(&range.from)?.id(), target);
     Ok(())
 }
+
+#[test]
+fn preserves_lines_with_oversized_linked_issue_numbers() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+    test_repo.commit(
+        "fix: to thine own self be true
+Closes #99999999999999999999
+Fixes globe-theatre/hamlet#99999999999999999999
+closes #7
+The rest is silence.",
+    )?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let commits = git_repo.history(None, None)?.commits;
+
+    assert_eq!(
+        commits[0].body.as_deref(),
+        Some(
+            "Closes #99999999999999999999\nFixes globe-theatre/hamlet#99999999999999999999\nThe rest is silence."
+        )
+    );
+    assert_eq!(commits[0].linked_issues.len(), 1);
+    assert_eq!(commits[0].linked_issues[0].number, 7);
+    Ok(())
+}

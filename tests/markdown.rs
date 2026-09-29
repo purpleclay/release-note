@@ -1162,3 +1162,52 @@ new = 2
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn sizes_avatars_regardless_of_existing_query_string() {
+    let contributor = |username: &str, avatar_url: &str| ContributorSummary {
+        username: username.to_string(),
+        avatar_url: avatar_url.to_string(),
+        count: 1,
+        is_bot: false,
+        is_ai: false,
+        first_commit_timestamp: 1748390400,
+        last_commit_timestamp: 1748390400,
+    };
+
+    let analyzed = AnalyzedCommits {
+        contributors: vec![
+            contributor(
+                "hamlet",
+                "https://gitlab.example.com/uploads/-/system/user/avatar/123/avatar.png",
+            ),
+            contributor(
+                "ophelia",
+                "https://gitlab.com/uploads/-/system/user/avatar/456/avatar.png?v=1790652666",
+            ),
+            contributor(
+                "horatio",
+                "https://secure.gravatar.com/avatar/abc123?s=80&d=identicon",
+            ),
+        ],
+        ..CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()])
+    };
+
+    let result = markdown::render_history(
+        &analyzed,
+        &gitlab(),
+        "v1.0.0",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    for expected in [
+        r#"<img src="https://gitlab.example.com/uploads/-/system/user/avatar/123/avatar.png?size=20&width=20" width="20" height="20" align="center">"#,
+        r#"<img src="https://gitlab.com/uploads/-/system/user/avatar/456/avatar.png?v=1790652666&size=20&width=20" width="20" height="20" align="center">"#,
+        r#"<img src="https://secure.gravatar.com/avatar/abc123?s=80&d=identicon&size=20&width=20" width="20" height="20" align="center">"#,
+    ] {
+        assert!(result.contains(expected), "missing {expected}\n\n{result}");
+    }
+}

@@ -20,6 +20,10 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- endif -%}
 {%- endmacro contributor_link -%}
 
+{%- macro avatar_url(url, size) -%}
+{{ url }}{% if "?" in url %}&{% else %}?{% endif %}size={{ size }}&width={{ size }}
+{%- endmacro avatar_url -%}
+
 {%- set breaking = commits | filter(attribute="breaking", value=true) -%}
 {%- set non_breaking = commits | filter(attribute="breaking", value=false) -%}
 {%- set dependencies = non_breaking | scoped(include="deps") -%}
@@ -68,7 +72,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if contributors %}
 ## Contributors
 {%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
-- <img src="{{ contributor.avatar_url }}&size=20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor) }})
+- <img src="{{ self::avatar_url(url=contributor.avatar_url, size=20) }}" width="20" height="20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor) }})
 {%- endfor %}
 {% endif %}
 {%- if breaking %}

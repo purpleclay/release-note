@@ -980,15 +980,12 @@ fn renders_full_changelog_trailer_for_github() {
 
 #[test]
 fn renders_full_changelog_trailer_after_dependency_table_for_gitlab() {
-    let analyzed = AnalyzedCommits {
-        contributors: Vec::new(),
-        ..CommitAnalyzer::analyze(&[
-            CommitBuilder::new("feat: all the world's a stage").build(),
-            CommitBuilder::new("chore(deps): bump serde to 1.0.200")
-                .with_contributor_bot("renovate[bot]")
-                .build(),
-        ])
-    };
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("feat: all the world's a stage").build(),
+        CommitBuilder::new("chore(deps): bump serde to 1.0.200")
+            .with_contributor_bot("renovate[bot]")
+            .build(),
+    ]);
 
     let result = markdown::render_history(
         &analyzed,
@@ -1210,4 +1207,32 @@ fn sizes_avatars_regardless_of_existing_query_string() {
     ] {
         assert!(result.contains(expected), "missing {expected}\n\n{result}");
     }
+}
+
+#[test]
+fn omits_contributors_heading_when_every_contributor_is_a_bot() {
+    let analyzed = CommitAnalyzer::analyze(&[
+        CommitBuilder::new("chore(deps): bump serde to 1.0.200")
+            .with_contributor_bot("renovate[bot]")
+            .build(),
+        CommitBuilder::new("chore(deps): bump tokio to 1.40.0")
+            .with_contributor_bot("dependabot[bot]")
+            .build(),
+    ]);
+    assert_eq!(analyzed.contributors.len(), 2);
+
+    let result = markdown::render_history(
+        &analyzed,
+        &github(),
+        "v1.0.0",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        DEFAULT_TEMPLATE,
+    )
+    .unwrap();
+
+    assert!(
+        !result.contains("## Contributors"),
+        "unexpected Contributors heading\n\n{result}"
+    );
 }

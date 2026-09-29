@@ -69,9 +69,10 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 
 {{ stats | join(sep=" • ") }}
 {% endif %}
-{%- if contributors %}
+{%- set humans = contributors | filter(attribute="is_bot", value=false) -%}
+{%- if humans %}
 ## Contributors
-{%- for contributor in contributors | filter(attribute="is_bot", value=false) %}
+{%- for contributor in humans %}
 - <img src="{{ self::avatar_url(url=contributor.avatar_url, size=20) }}" width="20" height="20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor) }})
 {%- endfor %}
 {% endif %}

@@ -371,3 +371,41 @@ fn does_not_duplicate_identical_breaking_footer_and_trailer() {
         Some("migrate the config file")
     );
 }
+
+#[test]
+fn parses_scopes_with_digits_dots_slashes_and_underscores() {
+    let test_cases = vec![
+        ("fix(k8s): the lady doth protest too much", "k8s"),
+        ("feat(api2): brevity is the soul of wit", "api2"),
+        ("fix(ui/button): all that glisters is not gold", "ui/button"),
+        ("feat(my_pkg): to thine own self be true", "my_pkg"),
+        ("chore(v1.2): the rest is silence", "v1.2"),
+        ("fix( spaced ): a plague o' both your houses", "spaced"),
+    ];
+
+    for (commit_msg, expected_scope) in test_cases {
+        let result = CommitAnalyzer::analyze(&[CommitBuilder::new(commit_msg).build()]);
+        let commit = &result.commits[0];
+        assert_ne!(commit.type_, "", "{commit_msg} was not parsed");
+        assert_eq!(commit.scope, expected_scope, "{commit_msg}");
+    }
+}
+
+proptest::proptest! {
+    #[test]
+    fn parses_any_scope_without_a_closing_parenthesis(
+        commit_type in "[a-z]{1,8}",
+        scope in "[^)\n]{1,20}",
+        description in "[a-z][a-z ]{0,20}",
+    ) {
+        proptest::prop_assume!(!scope.trim().is_empty());
+
+        let first_line = format!("{commit_type}({scope}): {description}");
+        let result = CommitAnalyzer::analyze(&[CommitBuilder::new(&first_line).build()]);
+        let commit = &result.commits[0];
+
+        proptest::prop_assert_eq!(&commit.type_, &commit_type);
+        proptest::prop_assert_eq!(&commit.scope, &scope.trim().to_lowercase());
+        proptest::prop_assert_eq!(&commit.description, &description);
+    }
+}

@@ -29,6 +29,8 @@ static LINKED_ISSUE: Lazy<Regex> = Lazy::new(|| {
     ).unwrap()
 });
 
+static EXCESSIVE_BLANK_LINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n{3,}").unwrap());
+
 struct Tag {
     name: String,
     oid: Oid,
@@ -182,8 +184,7 @@ impl Commit {
     }
 
     fn normalize_blank_lines(text: &str) -> String {
-        let re = regex::Regex::new(r"\n{3,}").unwrap();
-        re.replace_all(text, "\n\n").to_string()
+        EXCESSIVE_BLANK_LINES.replace_all(text, "\n\n").to_string()
     }
 
     fn parse_body_and_trailers(
@@ -194,8 +195,8 @@ impl Commit {
 
         for (i, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            if LINKED_ISSUE.is_match(trimmed) {
-                linked_issues.extend(Self::extract_linked_issues_from_line(trimmed));
+            if let Some(issue) = Self::extract_linked_issue_from_line(trimmed) {
+                linked_issues.push(issue);
                 lines_to_strip.insert(i);
             }
         }
@@ -267,27 +268,24 @@ impl Commit {
         )
     }
 
-    fn extract_linked_issues_from_line(line: &str) -> Vec<LinkedIssue> {
-        LINKED_ISSUE
-            .captures(line)
-            .map(|cap| {
-                if let Some(num) = cap.get(3) {
-                    vec![LinkedIssue {
-                        number: num.as_str().parse().unwrap(),
-                        owner: cap.get(1).map(|m| m.as_str().to_string()),
-                        repo: cap.get(2).map(|m| m.as_str().to_string()),
-                    }]
-                } else if let Some(num) = cap.get(4) {
-                    vec![LinkedIssue {
-                        number: num.as_str().parse().unwrap(),
-                        owner: None,
-                        repo: None,
-                    }]
-                } else {
-                    Vec::new()
-                }
-            })
-            .unwrap_or_default()
+    fn extract_linked_issue_from_line(line: &str) -> Option<LinkedIssue> {
+        LINKED_ISSUE.captures(line).and_then(|cap| {
+            if let Some(num) = cap.get(3) {
+                Some(LinkedIssue {
+                    number: num.as_str().parse().ok()?,
+                    owner: cap.get(1).map(|m| m.as_str().to_string()),
+                    repo: cap.get(2).map(|m| m.as_str().to_string()),
+                })
+            } else if let Some(num) = cap.get(4) {
+                Some(LinkedIssue {
+                    number: num.as_str().parse().ok()?,
+                    owner: None,
+                    repo: None,
+                })
+            } else {
+                None
+            }
+        })
     }
 }
 

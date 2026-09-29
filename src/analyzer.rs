@@ -5,8 +5,10 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::git::Commit;
 
+// A scope may contain any character except `)`. Whitespace before the colon
+// (`feat :`) is deliberately tolerated, although the specification forbids it.
 static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([a-z-]+)\))?(!)?(?:\s*):(?:\s*)(.+)").unwrap());
+    Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([^)]+)\))?(!)?(?:\s*):(?:\s*)(.+)").unwrap());
 
 static BREAKING_FOOTER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:").unwrap());
@@ -141,7 +143,7 @@ impl CommitAnalyzer {
     fn parse_conventional_commit(first_line: &str) -> Option<ConventionalCommit> {
         if let Some(captures) = CONVENTIONAL_COMMIT_PREFIX.captures(first_line) {
             let commit_type = captures.get(1)?.as_str().to_lowercase();
-            let scope = captures.get(2).map(|m| m.as_str().to_lowercase());
+            let scope = captures.get(2).map(|m| m.as_str().trim().to_lowercase());
             let breaking = captures.get(3).is_some();
             let description = captures.get(4)?.as_str().to_string();
 

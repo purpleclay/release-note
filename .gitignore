@@ -17,6 +17,7 @@
 !scripts/*
 !SECURITY.md
 !src/**/*.rs
+!tests/*.proptest-regressions
 !tests/*.rs
 !tests/snapshots/*.snap
 !typos.toml

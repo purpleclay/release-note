@@ -1,5 +1,10 @@
 # Release Note
 
+![Nix](https://img.shields.io/badge/Nix-5277C3?logo=nixos&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-CE412B?logo=rust&logoColor=white)
+[![MIT](https://img.shields.io/badge/MIT-gray?logo=github&logoColor=white)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/purpleclay/release-note/badge)](https://scorecard.dev/viewer/?uri=github.com/purpleclay/release-note)
+
 Generate a release note for your project.
 
 ## Install

@@ -43,6 +43,7 @@
 
         buildInputs = with pkgs; [
           alejandra
+          cargo-deny
           cargo-insta
           cargo-nextest
           nil

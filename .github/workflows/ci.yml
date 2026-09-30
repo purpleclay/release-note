@@ -83,7 +83,10 @@ jobs:
       - name: cache_rust
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: "clippy"
+          # Scope the cache to the Nix dev shell. A cache restored from a
+          # different dev shell can be missing build script binaries that
+          # cargo then tries to re-run.
+          shared-key: "clippy-${{ hashFiles('flake.lock', 'flake.nix') }}"
 
       - name: cargo_clippy
         run: nix develop -c cargo clippy -- -Dwarnings
@@ -155,7 +158,10 @@ jobs:
       - name: cache_rust
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: "test-${{ matrix.os }}"
+          # Scope the cache to the Nix dev shell. A cache restored from a
+          # different dev shell can be missing build script binaries that
+          # cargo then tries to re-run.
+          shared-key: "test-${{ matrix.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}"
 
       - name: run_tests
         run: nix develop -c cargo nextest run

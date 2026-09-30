@@ -6,24 +6,32 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   nsv:
     runs-on: ubuntu-26.04
+    name: nsv
     permissions:
-      contents: write
+      contents: write # Needed by nsv to tag the release
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked] nsv pushes the release tag using the GH_NSV credentials persisted here
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_NSV }}
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: install_nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Cachix
+      - name: setup_cachix
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: purpleclay
@@ -31,14 +39,14 @@ jobs:
           skipPush: true
           useDaemon: false
 
-      - name: GPG Import
+      - name: gpg_import
         env:
           # skipcq: SCT-A000
           GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
           GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
         run: nix run github:purpleclay/gpg-import
 
-      - name: Tag
+      - name: tag
         env:
           # renovate: datasource=github-tags depName=purpleclay/nsv
           NSV_VERSION: "v0.12.2"

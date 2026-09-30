@@ -21,20 +21,28 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: write
+permissions: {}
+
 jobs:
   alejandra:
     runs-on: ubuntu-26.04
+    name: alejandra
     if: github.actor != 'renovate[bot]'
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Setup Cachix
+      - name: install_nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: setup_cachix
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: purpleclay
@@ -42,22 +50,29 @@ jobs:
           skipPush: true
           useDaemon: false
 
-      - name: Run Alejandra
+      - name: run_alejandra
         run: nix develop -c alejandra --check .
   build:
     runs-on: ${{ matrix.os }}
-    name: build / ${{ matrix.os }}
+    name: build_${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Setup Cachix
+      - name: install_nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: setup_cachix
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: purpleclay
@@ -65,5 +80,5 @@ jobs:
           skipPush: false
           useDaemon: false
 
-      - name: Build Nix Package
+      - name: build_nix_package
         run: nix build

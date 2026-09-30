@@ -10,6 +10,7 @@
 !Cargo.toml
 !CODE_OF_CONDUCT.md
 !default.nix
+!deny.toml
 !flake.lock
 !flake.nix
 !LICENSE

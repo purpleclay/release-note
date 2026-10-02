@@ -31,11 +31,6 @@ static LINKED_ISSUE: Lazy<Regex> = Lazy::new(|| {
 
 static EXCESSIVE_BLANK_LINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n{3,}").unwrap());
 
-struct Tag {
-    name: String,
-    oid: Oid,
-}
-
 pub struct GitRepo {
     repo: Repository,
     path_filter: Option<PathBuf>,
@@ -366,133 +361,90 @@ impl GitRepo {
         })
     }
 
-    fn is_semver_tag(tag_name: &str) -> bool {
+    fn semver_of(tag_name: &str) -> Option<Version> {
         let version_part = tag_name.rsplit('/').next().unwrap_or(tag_name);
         let to_parse = version_part.strip_prefix('v').unwrap_or(version_part);
-        Version::parse(to_parse).is_ok()
+        Version::parse(to_parse).ok()
     }
 
-    fn load_tags_sorted(repo: &Repository) -> Result<Vec<Tag>> {
-        let mut tags = Vec::new();
+    // Maps each tagged commit to its semver tag. When a commit carries several,
+    // the highest version wins, with the tag name as a deterministic tie-break.
+    fn load_semver_tags(repo: &Repository) -> Result<HashMap<Oid, String>> {
+        let mut tags: HashMap<Oid, (Version, String)> = HashMap::new();
         let tag_names = repo.tag_names(None)?;
 
         for tag_name in tag_names.iter().flatten().flatten() {
-            if !Self::is_semver_tag(tag_name) {
+            let Some(version) = Self::semver_of(tag_name) else {
                 continue;
-            }
+            };
 
             let tag_ref = format!("refs/tags/{}", tag_name);
             if let Ok(reference) = repo.find_reference(&tag_ref)
                 && let Ok(commit) = reference.peel_to_commit()
             {
-                tags.push((tag_name.to_string(), commit.id(), commit.time().seconds()));
+                let candidate = (version, tag_name.to_string());
+                tags.entry(commit.id())
+                    .and_modify(|current| {
+                        if candidate > *current {
+                            *current = candidate.clone();
+                        }
+                    })
+                    .or_insert(candidate);
             }
         }
 
-        tags.sort_by(|a, b| b.2.cmp(&a.2));
         Ok(tags
             .into_iter()
-            .map(|(name, oid, _)| Tag { name, oid })
+            .map(|(oid, (_, name))| (oid, name))
             .collect())
     }
 
     pub fn history(&self, from: Option<String>, to: Option<String>) -> Result<History> {
-        let tags = Self::load_tags_sorted(&self.repo)?;
+        let tags = Self::load_semver_tags(&self.repo)?;
 
-        let tag_index: HashMap<Oid, usize> = tags
-            .iter()
-            .enumerate()
-            .map(|(idx, tag)| (tag.oid, idx))
-            .collect();
-
-        let (from_oid, from_ref) = match from {
-            Some(ref from) => {
-                let object = self.repo.revparse_single(from)?;
-                let id = object.peel_to_commit()?.id();
-
-                if let Some(tag) = tags.iter().find(|t| t.oid == id) {
-                    (id, format!("{} ({})", tag.name, &id.to_string()[..7]))
-                } else {
-                    (id, id.to_string()[..7].to_string())
-                }
-            }
-            None => {
-                let head = self.repo.head()?;
-                let id = head.peel_to_commit()?.id();
-                (id, format!("HEAD ({})", &id.to_string()[..7]))
-            }
-        };
-
-        let (to_oid, to_ref) = match to {
-            Some(ref to) => {
-                let object = self.repo.revparse_single(to)?;
-                let id = object.peel_to_commit()?.id();
-                (Some(id), Some(id.to_string()[..7].to_string()))
-            }
-            None => {
-                if let Some(&index) = tag_index.get(&from_oid) {
-                    if index + 1 < tags.len() {
-                        let prev_tag = &tags[index + 1];
-                        (
-                            Some(prev_tag.oid),
-                            Some(format!(
-                                "{} ({})",
-                                prev_tag.name.clone(),
-                                &prev_tag.oid.to_string()[..7],
-                            )),
-                        )
-                    } else {
-                        (None, None)
-                    }
-                } else if !tags.is_empty() {
-                    let head_oid = self.repo.head()?.peel_to_commit()?.id();
-
-                    if from_oid == head_oid {
-                        let tag = &tags[0];
-                        (
-                            Some(tag.oid),
-                            Some(format!(
-                                "{} ({})",
-                                tag.name.clone(),
-                                &tag.oid.to_string()[..7],
-                            )),
-                        )
-                    } else if let Some(tag_oid) = self.find_closest_tag(from_oid, &tag_index)? {
-                        let tag = tags.iter().find(|t| t.oid == tag_oid).unwrap();
-                        (
-                            Some(tag.oid),
-                            Some(format!(
-                                "{} ({})",
-                                tag.name.clone(),
-                                &tag.oid.to_string()[..7],
-                            )),
-                        )
-                    } else {
-                        (None, None)
-                    }
-                } else {
-                    (None, None)
-                }
-            }
-        };
-
-        log::info!(
-            "scanning from {}{}",
-            from_ref,
-            to_ref.map_or_else(|| "".to_string(), |v| format!(" to {}", v)),
-        );
-
-        let ref_name = |oid: Oid| -> Result<String> {
-            if let Some(tag) = tags.iter().find(|t| t.oid == oid) {
-                return Ok(tag.name.clone());
+        // A requested tag keeps its name; otherwise a commit is named by its
+        // highest semver tag, falling back to its abbreviated hash.
+        let name_for = |rev: Option<&String>, oid: Oid| -> Result<String> {
+            let tag = rev
+                .and_then(|rev| self.requested_tag(rev, oid))
+                .or_else(|| tags.get(&oid).cloned());
+            if let Some(name) = tag {
+                return Ok(name);
             }
             let short_id = self.repo.find_object(oid, None)?.short_id()?;
             Ok(short_id.as_str().unwrap_or_default().to_string())
         };
-        let range = ReleaseRange {
-            from: ref_name(from_oid)?,
-            to: to_oid.map(ref_name).transpose()?,
+
+        let from_oid = match &from {
+            Some(rev) => self.repo.revparse_single(rev)?.peel_to_commit()?.id(),
+            None => self.repo.head()?.peel_to_commit()?.id(),
         };
+        let from_name = name_for(from.as_ref(), from_oid)?;
+
+        // A tagged `from` measures from a lower version where one exists, so a
+        // maintenance branch that merged main is not measured from main's release.
+        let ceiling = Self::semver_of(&from_name);
+        let to_oid = match &to {
+            Some(rev) => Some(self.repo.revparse_single(rev)?.peel_to_commit()?.id()),
+            None => match self.find_previous_tag(from_oid, &tags, ceiling.as_ref())? {
+                None if ceiling.is_some() => self.find_previous_tag(from_oid, &tags, None)?,
+                found => found,
+            },
+        };
+
+        let range = ReleaseRange {
+            from: from_name,
+            to: to_oid.map(|oid| name_for(to.as_ref(), oid)).transpose()?,
+        };
+
+        log::info!(
+            "scanning from {}{}",
+            range.from,
+            range
+                .to
+                .as_ref()
+                .map_or_else(String::new, |to| format!(" to {to}")),
+        );
 
         if let Some(ref path) = self.path_filter {
             log::info!("filtering commits to path: {}", path.display());
@@ -528,23 +480,85 @@ impl GitRepo {
         Ok(History { range, commits })
     }
 
-    fn find_closest_tag(
+    // The previous release is chosen from the nearest semver-tagged ancestors of
+    // `from_oid`: tagged commits in its history that no other tagged commit there
+    // descends from. Tags on unmerged branches are never candidates. When merged
+    // branches leave several (e.g. a backport merged back into main), the highest
+    // version wins. Tags at or above `ceiling` are walked past, not considered.
+    //
+    // Each walk hides the tags already found and stops at the first tagged commit
+    // it reaches. The walks are unsorted, which libgit2 performs lazily: both
+    // topological and date sorting prepare the whole history before yielding the
+    // first commit, which costs around a second on a large repository. As an
+    // unsorted walk can reach an older tag before a nearer one, any candidate
+    // that another candidate descends from is discarded afterwards.
+    fn find_previous_tag(
         &self,
         from_oid: Oid,
-        tag_index: &HashMap<Oid, usize>,
+        tags: &HashMap<Oid, String>,
+        ceiling: Option<&Version>,
     ) -> Result<Option<Oid>> {
-        let mut revwalk = self.repo.revwalk()?;
-        revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME)?;
-        revwalk.push(from_oid)?;
+        let eligible = |oid: &Oid| {
+            tags.get(oid).is_some_and(|name| {
+                ceiling.is_none_or(|max| Self::semver_of(name).is_some_and(|v| &v < max))
+            })
+        };
+        let mut candidates: Vec<Oid> = Vec::new();
 
-        for oid in revwalk {
-            let oid = oid?;
-            if tag_index.contains_key(&oid) {
-                return Ok(Some(oid));
+        loop {
+            let mut revwalk = self.repo.revwalk()?;
+            revwalk.set_sorting(Sort::NONE)?;
+            revwalk.push(from_oid)?;
+            for &oid in &candidates {
+                revwalk.hide(oid)?;
+            }
+
+            let mut found = None;
+            for oid in revwalk {
+                let oid = oid?;
+                if oid != from_oid && eligible(&oid) {
+                    found = Some(oid);
+                    break;
+                }
+            }
+
+            match found {
+                Some(oid) => candidates.push(oid),
+                None => break,
             }
         }
 
-        Ok(None)
+        let mut nearest = Vec::with_capacity(candidates.len());
+        for &oid in &candidates {
+            let mut superseded = false;
+            for &other in &candidates {
+                if other != oid && self.repo.graph_descendant_of(other, oid)? {
+                    superseded = true;
+                    break;
+                }
+            }
+            if !superseded {
+                nearest.push(oid);
+            }
+        }
+
+        Ok(nearest
+            .into_iter()
+            .max_by_key(|oid| (Self::semver_of(&tags[oid]), tags[oid].clone())))
+    }
+
+    // The semver tag named by a `from`/`to` argument, when it points at `oid`.
+    // Keeps the requested name when a commit carries several tags.
+    fn requested_tag(&self, rev: &str, oid: Oid) -> Option<String> {
+        let name = rev.strip_prefix("refs/tags/").unwrap_or(rev);
+        Self::semver_of(name)?;
+        let commit = self
+            .repo
+            .find_reference(&format!("refs/tags/{name}"))
+            .ok()?
+            .peel_to_commit()
+            .ok()?;
+        (commit.id() == oid).then(|| name.to_string())
     }
 
     fn commit_touches_path(repo: &Repository, commit: &git2::Commit, path: &Path) -> Result<bool> {

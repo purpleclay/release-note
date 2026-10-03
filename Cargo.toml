@@ -27,9 +27,6 @@ textwrap = { version = "0.16", features = ["smawk"] }
 thiserror = "2.0"
 urlencoding = "2.1"
 
-[build-dependencies]
-built = { version = "0.8.0", features = ["git2", "semver", "chrono"] }
-
 [dev-dependencies]
 insta = "1.43"
 proptest = "1"

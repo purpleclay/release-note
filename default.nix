@@ -4,6 +4,8 @@
   pkg-config,
   rustPlatform,
   zlib,
+  rev ? null,
+  lastModified ? null,
 }:
 rustPlatform.buildRustPackage {
   pname = "release-note";
@@ -13,6 +15,10 @@ rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ./Cargo.lock;
   };
+
+  # The Nix sandbox has no .git, so build.rs reads the commit from these instead
+  RELEASE_NOTE_GIT_SHA = rev;
+  SOURCE_DATE_EPOCH = lastModified;
 
   nativeBuildInputs = [
     pkg-config

@@ -575,10 +575,10 @@ fn exposes_flat_commits_to_template() {
 
     assert_eq!(
         result,
-        "feat||false|love all, trust a few, do wrong to none
-chore|deps|false|all that glisters is not gold
-fix||true|some rise by sin, and some by virtue fall
-build|api|false|if music be the food of love, play on
+        "feat||False|love all, trust a few, do wrong to none
+chore|deps|False|all that glisters is not gold
+fix||True|some rise by sin, and some by virtue fall
+build|api|False|if music be the food of love, play on
 "
     );
 }
@@ -1235,4 +1235,36 @@ fn omits_contributors_heading_when_every_contributor_is_a_bot() {
         !result.contains("## Contributors"),
         "unexpected Contributors heading\n\n{result}"
     );
+}
+
+fn render_one(template: &str) -> anyhow::Result<String> {
+    let analyzed =
+        CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
+    markdown::render_history(
+        &analyzed,
+        &Platform::Unknown,
+        "HEAD",
+        &first_release(),
+        TEST_RELEASE_DATE,
+        template,
+    )
+}
+
+#[test]
+fn printing_an_undefined_field_is_an_error() {
+    let error = format!(
+        "{:#}",
+        render_one("{% for commit in commits %}{{ commit.missing_field }}{% endfor %}")
+            .unwrap_err()
+    );
+    assert!(error.contains("undefined"), "{error}");
+}
+
+#[test]
+fn checking_an_undefined_field_is_allowed() {
+    let result = render_one(
+        "{% for commit in commits %}{% if commit.missing %}yes{% else %}no{% endif %}{% endfor %}",
+    )
+    .unwrap();
+    assert_eq!(result, "no");
 }

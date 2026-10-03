@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use minijinja::Environment;
 use std::path::PathBuf;
 
 pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
-{%- if commit.contributors %} ({{ commit.contributors | mention | join(sep=", ") }}){% endif -%}
-{%- endmacro commit_contributors -%}
+{%- if commit.contributors %} ({{ commit.contributors | mention | join(", ") }}){% endif -%}
+{%- endmacro -%}
 
 {%- macro contributor_link(contributor) -%}
 {%- if contributor.is_ai -%}
@@ -18,14 +19,14 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 **`{{ contributor.count }}`** commit{% if contributor.count != 1 %}s{% endif %}
 {%- endif -%}
 {%- endif -%}
-{%- endmacro contributor_link -%}
+{%- endmacro -%}
 
 {%- macro avatar_url(url, size) -%}
 {{ url }}{% if "?" in url %}&{% else %}?{% endif %}size={{ size }}&width={{ size }}
-{%- endmacro avatar_url -%}
+{%- endmacro -%}
 
-{%- set breaking = commits | filter(attribute="breaking", value=true) -%}
-{%- set non_breaking = commits | filter(attribute="breaking", value=false) -%}
+{%- set breaking = commits | selectattr("breaking") -%}
+{%- set non_breaking = commits | rejectattr("breaking") -%}
 {%- set dependencies = non_breaking | scoped(include="deps") -%}
 {%- set changes = non_breaking | scoped(exclude="deps") -%}
 {%- set features = changes | typed(include="feat") -%}
@@ -39,9 +40,9 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
   {%- set breaking_count = breaking | length -%}
   {%- if breaking_count > 0 -%}
     {%- if breaking_count == 1 -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking change") -%}
+      {%- set stats = stats + ["[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking change"] -%}
     {%- else -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking changes") -%}
+      {%- set stats = stats + ["[**`" ~ breaking_count ~ "`**](#breaking-changes) breaking changes"] -%}
     {%- endif -%}
   {%- endif -%}
 {%- endif -%}
@@ -49,9 +50,9 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
   {%- set features_count = features | length -%}
   {%- if features_count > 0 -%}
     {%- if features_count == 1 -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ features_count ~ "`**](#new-features) new feature") -%}
+      {%- set stats = stats + ["[**`" ~ features_count ~ "`**](#new-features) new feature"] -%}
     {%- else -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ features_count ~ "`**](#new-features) new features") -%}
+      {%- set stats = stats + ["[**`" ~ features_count ~ "`**](#new-features) new features"] -%}
     {%- endif -%}
   {%- endif -%}
 {%- endif -%}
@@ -59,35 +60,35 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
   {%- set fixes_count = fixes | length -%}
   {%- if fixes_count > 0 -%}
     {%- if fixes_count == 1 -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixed") -%}
+      {%- set stats = stats + ["[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixed"] -%}
     {%- else -%}
-      {%- set_global stats = stats | concat(with="[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixes") -%}
+      {%- set stats = stats + ["[**`" ~ fixes_count ~ "`**](#bug-fixes) bug fixes"] -%}
     {%- endif -%}
   {%- endif -%}
 {%- endif -%}
 {%- if stats | length > 0 %}
 
-{{ stats | join(sep=" • ") }}
+{{ stats | join(" • ") }}
 {% endif %}
-{%- set humans = contributors | filter(attribute="is_bot", value=false) -%}
+{%- set humans = contributors | rejectattr("is_bot") -%}
 {%- if humans %}
 ## Contributors
 {%- for contributor in humans %}
-- <img src="{{ self::avatar_url(url=contributor.avatar_url, size=20) }}" width="20" height="20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ self::contributor_link(contributor=contributor) }})
+- <img src="{{ avatar_url(url=contributor.avatar_url, size=20) }}" width="20" height="20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ contributor_link(contributor=contributor) }})
 {%- endfor %}
 {% endif %}
 {%- if breaking %}
 ## Breaking Changes
 {%- for commit in breaking %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
+{{ commit.body | unwrap | indent(2, first=true) }}
 {%- endif %}
 {%- if commit.breaking_description %}
 
 > [!IMPORTANT]
-{{ commit.breaking_description | unwrap | indent(prefix = "> ", first=true, blank=true) }}
+{{ "> " ~ (commit.breaking_description | unwrap) | replace("\n", "\n> ") }}
 {%- endif %}
 {%- endfor %}
 
@@ -95,10 +96,10 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if features %}
 ## New Features
 {%- for commit in features %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
+{{ commit.body | unwrap | indent(2, first=true) }}
 {%- endif %}
 {%- endfor %}
 
@@ -106,10 +107,10 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if fixes %}
 ## Bug Fixes
 {%- for commit in fixes %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
+{{ commit.body | unwrap | indent(2, first=true) }}
 {%- endif %}
 {%- endfor %}
 
@@ -117,10 +118,10 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 {%- if perf %}
 ## Performance Improvements
 {%- for commit in perf %}
-- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ self::commit_contributors(commit=commit) }}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ commit_contributors(commit=commit) }}
 {%- if commit.body %}
 
-{{ commit.body | unwrap | indent(prefix = "  ", first=true) }}
+{{ commit.body | unwrap | indent(2, first=true) }}
 {%- endif %}
 {%- endfor %}
 
@@ -131,7 +132,7 @@ pub const DEFAULT_TEMPLATE: &str = r#"{%- macro commit_contributors(commit) -%}
 | Commit | Update | Contributors |
 |--------|--------|--------------|
 {%- for commit in dependencies %}
-| {{ commit_url(sha = commit.hash) }} | {{ commit.description | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(sep=", ") }}{% endif %} |
+| {{ commit_url(sha = commit.hash) }} | {{ commit.description | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(", ") }}{% endif %} |
 {%- endfor %}
 
 {%- endif %}
@@ -154,9 +155,9 @@ impl TemplateResolver {
 
     pub fn resolve(&self) -> Result<String> {
         let candidates = [
-            self.working_dir.join("release-note.tera"),
-            self.working_dir.join(".github/release-note.tera"),
-            self.working_dir.join(".gitlab/release-note.tera"),
+            self.working_dir.join("release-note.jinja"),
+            self.working_dir.join(".github/release-note.jinja"),
+            self.working_dir.join(".gitlab/release-note.jinja"),
         ];
 
         for path in candidates {
@@ -164,12 +165,22 @@ impl TemplateResolver {
                 let content = std::fs::read_to_string(&path)
                     .with_context(|| format!("failed to read template: {}", path.display()))?;
 
-                let mut tera = tera::Tera::default();
-                tera.add_raw_template("custom", &content)
+                Environment::new()
+                    .template_from_named_str(&path.display().to_string(), &content)
                     .with_context(|| format!("invalid template syntax in {}", path.display()))?;
 
                 log::info!("using custom template: {}", path.display());
                 return Ok(content);
+            }
+
+            // Tera templates are no longer supported. Fail rather than fall back to
+            // a lower-priority or default template
+            let tera = path.with_extension("tera");
+            if tera.is_file() {
+                anyhow::bail!(
+                    "found Tera template {}, templates now use Jinja syntax and must be renamed to release-note.jinja",
+                    tera.display()
+                );
             }
         }
 

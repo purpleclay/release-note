@@ -112,6 +112,8 @@
 
           packages.default = pkgs.callPackage ./default.nix {
             inherit rustPlatform;
+            rev = self.rev or self.dirtyRev or null;
+            lastModified = self.lastModified or null;
           };
         }
     );

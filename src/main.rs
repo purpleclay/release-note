@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, arg};
 use release_note::platform::Platform;
 use std::path::PathBuf;
@@ -81,10 +81,7 @@ fn main() -> Result<()> {
         commits: mut history,
     } = repo.history(args.from.clone(), args.to.clone())?;
 
-    let git_ref = args.from.clone().map(Ok).unwrap_or_else(|| {
-        repo.current_ref()
-            .context("failed to determine current reference")
-    })?;
+    let git_ref = args.from.clone().unwrap_or_else(|| range.from.clone());
     let platform = Platform::detect(repo.origin_url(), &args.trusted_host);
 
     if let Ok(Some(mut resolver)) = contributor::ContributorResolver::new(&platform) {

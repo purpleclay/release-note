@@ -905,6 +905,53 @@ fn prefers_highest_semver_when_a_commit_has_several_tags() -> Result<()> {
     Ok(())
 }
 
+fn release_heading(path: &Path) -> String {
+    // Stops CI detection resolving contributors through the platform API
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_release-note"))
+        .arg("--path")
+        .arg(path)
+        .env_remove("GITHUB_ACTIONS")
+        .env_remove("GITLAB_CI")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn names_release_after_semver_tag_at_head_over_other_tags() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        (tag: latest, v1.2.3) feat: all the world's a stage
+        (tag: v1.0.0) fix: what's in a name?
+    ",
+    )?;
+
+    let heading = release_heading(test_repo.path());
+    assert!(heading.starts_with("## v1.2.3 - "), "{heading}");
+    Ok(())
+}
+
+#[test]
+fn names_release_after_highest_semver_tag_at_head() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        (tag: v1.2.3, v1.2.4) feat: all the world's a stage
+        (tag: v1.0.0) fix: what's in a name?
+    ",
+    )?;
+
+    let heading = release_heading(test_repo.path());
+    assert!(heading.starts_with("## v1.2.4 - "), "{heading}");
+    Ok(())
+}
+
 // main:        v1.0.0 ── v2.0.0 ── merge ── v2.1.0
 //                 └── v1.0.1 ──────┘ (backport, tagged after v2.0.0, merged into main)
 #[test]

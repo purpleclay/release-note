@@ -289,25 +289,6 @@ impl GitRepo {
         self.origin_url.as_deref()
     }
 
-    pub fn current_ref(&self) -> Result<String> {
-        let head = self.repo.head()?;
-        let head_oid = head.peel_to_commit()?.id();
-
-        if let Ok(tag_names) = self.repo.tag_names(None) {
-            for tag_name in tag_names.iter().flatten().flatten() {
-                let tag_ref = format!("refs/tags/{}", tag_name);
-                if let Ok(reference) = self.repo.find_reference(&tag_ref)
-                    && let Ok(commit) = reference.peel_to_commit()
-                    && commit.id() == head_oid
-                {
-                    return Ok(tag_name.to_string());
-                }
-            }
-        }
-
-        Ok(head_oid.to_string()[..7].to_string())
-    }
-
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let provided_path = path.as_ref();
         let abs_path = if provided_path.is_absolute() {

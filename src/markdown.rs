@@ -1,9 +1,9 @@
 use crate::{analyzer::AnalyzedCommits, git::ReleaseRange, platform::Platform};
 use anyhow::{Context, Result};
+use minijinja::value::{Kwargs, Value};
+use minijinja::{Environment, Error, ErrorKind, UndefinedBehavior, context};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashMap;
-use tera::Value;
 
 static NUMBERED_LIST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+\.\s").unwrap());
 static TABLE_SEPARATOR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\|[\s\-:|]+\|$").unwrap());
@@ -113,11 +113,7 @@ fn unwrap_structured_content(para: &str) -> String {
     result.join("\n")
 }
 
-fn unwrap_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
-    let text = value
-        .as_str()
-        .ok_or_else(|| tera::Error::msg("unwrap filter requires a string value"))?;
-
+fn unwrap_filter(text: &str) -> String {
     let paragraphs: Vec<&str> = text.split("\n\n").collect();
 
     let unwrapped_paragraphs: Vec<String> = paragraphs
@@ -149,156 +145,139 @@ fn unwrap_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<
         })
         .collect();
 
-    Ok(Value::String(unwrapped_paragraphs.join("\n\n")))
+    unwrapped_paragraphs.join("\n\n")
 }
 
-fn mention_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
-    if let Some(arr) = value.as_array() {
-        let mentions: Vec<Value> = arr
-            .iter()
-            .filter_map(|v| {
-                if let Some(username) = v.get("username").and_then(|u| u.as_str()) {
-                    Some(Value::String(format!("@{}", username)))
-                } else {
-                    v.as_str().map(|s| Value::String(format!("@{}", s)))
-                }
-            })
-            .collect();
-        Ok(Value::Array(mentions))
-    } else if let Some(s) = value.as_str() {
-        Ok(Value::String(format!("@{}", s)))
-    } else {
-        Err(tera::Error::msg(
-            "mention filter requires a string or array value",
-        ))
+fn mention_filter(value: Value) -> Result<Value, Error> {
+    if let Some(s) = value.as_str() {
+        return Ok(Value::from(format!("@{}", s)));
     }
-}
 
-fn get_lowercase_strings(value: &Value) -> Vec<String> {
-    match value {
-        Value::Array(arr) => arr
-            .iter()
-            .filter_map(|v| v.as_str().map(str::to_lowercase))
-            .collect(),
-        Value::String(s) => vec![s.to_lowercase()],
-        _ => vec![],
-    }
-}
-
-fn filter_by_field(
-    value: &Value,
-    args: &HashMap<String, Value>,
-    field: &str,
-    filter: &str,
-) -> tera::Result<Value> {
-    let arr = value
-        .as_array()
-        .ok_or_else(|| tera::Error::msg(format!("{} filter requires an array", filter)))?;
-
-    let include = args
-        .get("include")
-        .map(get_lowercase_strings)
-        .unwrap_or_default();
-    let exclude = args
-        .get("exclude")
-        .map(get_lowercase_strings)
-        .unwrap_or_default();
-
-    let filtered: Vec<Value> = arr
-        .iter()
-        .filter(|item| {
-            let field = item
-                .get(field)
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_lowercase();
-
-            let included = include.is_empty() || include.contains(&field);
-            let excluded = exclude.contains(&field);
-
-            included && !excluded
+    let mentions: Vec<Value> = value
+        .try_iter()?
+        .filter_map(|v| {
+            let username = v.get_attr("username").ok().filter(|u| !u.is_undefined());
+            username
+                .as_ref()
+                .unwrap_or(&v)
+                .as_str()
+                .map(|s| Value::from(format!("@{}", s)))
         })
-        .cloned()
         .collect();
-
-    Ok(Value::Array(filtered))
+    Ok(Value::from(mentions))
 }
 
-fn typed_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
-    filter_by_field(value, args, "type", "typed")
+fn get_lowercase_strings(value: Option<Value>) -> Vec<String> {
+    match value {
+        Some(v) if v.as_str().is_some() => vec![v.as_str().unwrap().to_lowercase()],
+        Some(v) => v
+            .try_iter()
+            .map(|items| {
+                items
+                    .filter_map(|item| item.as_str().map(str::to_lowercase))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        None => vec![],
+    }
 }
 
-fn scoped_filter(value: &Value, args: &HashMap<String, Value>) -> tera::Result<Value> {
-    filter_by_field(value, args, "scope", "scoped")
+fn filter_by_field(value: Value, kwargs: Kwargs, field: &str) -> Result<Value, Error> {
+    let include = get_lowercase_strings(kwargs.get("include")?);
+    let exclude = get_lowercase_strings(kwargs.get("exclude")?);
+    kwargs.assert_all_used()?;
+
+    let mut filtered = Vec::new();
+    for item in value.try_iter()? {
+        let field = item.get_attr(field)?.as_str().unwrap_or("").to_lowercase();
+
+        let included = include.is_empty() || include.contains(&field);
+        let excluded = exclude.contains(&field);
+
+        if included && !excluded {
+            filtered.push(item);
+        }
+    }
+
+    Ok(Value::from(filtered))
 }
 
-fn table_escape_filter(value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
-    let text = value
-        .as_str()
-        .ok_or_else(|| tera::Error::msg("table_escape filter requires a string value"))?;
+fn typed_filter(value: Value, kwargs: Kwargs) -> Result<Value, Error> {
+    filter_by_field(value, kwargs, "type")
+}
 
-    Ok(Value::String(text.replace('|', "\\|")))
+fn scoped_filter(value: Value, kwargs: Kwargs) -> Result<Value, Error> {
+    filter_by_field(value, kwargs, "scope")
+}
+
+fn table_escape_filter(text: &str) -> String {
+    text.replace('|', "\\|")
+}
+
+// Formats a Unix timestamp in UTC using strftime directives, e.g. "%B %d, %Y".
+fn date_filter(timestamp: i64, kwargs: Kwargs) -> Result<String, Error> {
+    let format: Option<&str> = kwargs.get("format")?;
+    kwargs.assert_all_used()?;
+
+    let invalid = |e: jiff::Error| Error::new(ErrorKind::InvalidOperation, e.to_string());
+    let timestamp = jiff::Timestamp::from_second(timestamp).map_err(invalid)?;
+    jiff::fmt::strtime::format(format.unwrap_or("%Y-%m-%d"), timestamp).map_err(invalid)
 }
 
 fn register_platform_functions(
-    tera: &mut tera::Tera,
+    env: &mut Environment,
     git_ref: &str,
     range: &ReleaseRange,
     platform: &Platform,
 ) {
-    let platform = platform.clone();
-
-    tera.register_function("compare_url", {
+    env.add_function("compare_url", {
         let platform = platform.clone();
         let range = range.clone();
-        move |args: &HashMap<String, Value>| -> tera::Result<Value> {
-            let from = args
-                .get("from")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&range.from);
-            let to = args
-                .get("to")
-                .and_then(|v| v.as_str())
-                .or(range.to.as_deref());
+        move |kwargs: Kwargs| -> Result<Value, Error> {
+            let from: Option<String> = kwargs.get("from")?;
+            let to: Option<String> = kwargs.get("to")?;
+            kwargs.assert_all_used()?;
 
-            match to.and_then(|to| platform.compare_url(to, from)) {
-                Some(url) => Ok(Value::String(url)),
-                None => Ok(Value::Null),
-            }
+            let from = from.unwrap_or_else(|| range.from.clone());
+            let to = to.or_else(|| range.to.clone());
+            Ok(to
+                .and_then(|to| platform.compare_url(&to, &from))
+                .map_or(Value::from(()), Value::from))
         }
     });
 
-    tera.register_function("commit_url", {
+    env.add_function("commit_url", {
         let platform = platform.clone();
-        move |args: &HashMap<String, Value>| -> tera::Result<Value> {
-            let sha = args
-                .get("sha")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| tera::Error::msg("commit_url requires 'sha'"))?;
+        move |kwargs: Kwargs| -> Result<String, Error> {
+            let sha: String = kwargs.get("sha")?;
+            kwargs.assert_all_used()?;
 
             let short_sha = &sha[..7.min(sha.len())];
 
-            if let Some(url) = platform.commit_url(sha) {
-                Ok(Value::String(format!("[**`{}`**]({})", short_sha, url)))
-            } else {
-                Ok(Value::String(format!("**`{}`**", short_sha)))
-            }
+            Ok(match platform.commit_url(&sha) {
+                Some(url) => format!("[**`{}`**]({})", short_sha, url),
+                None => format!("**`{}`**", short_sha),
+            })
         }
     });
 
-    tera.register_function("contributor_commits_url", {
+    env.add_function("contributor_commits_url", {
         let platform = platform.clone();
         let git_ref = git_ref.to_string();
-        move |args: &HashMap<String, Value>| -> tera::Result<Value> {
-            let author = args.get("author").and_then(|v| v.as_str()).unwrap_or("");
-            let since = args.get("since").and_then(|v| v.as_str()).unwrap_or("");
-            let until = args.get("until").and_then(|v| v.as_str()).unwrap_or("");
+        move |kwargs: Kwargs| -> Result<Value, Error> {
+            let author: Option<String> = kwargs.get("author")?;
+            let since: Option<String> = kwargs.get("since")?;
+            let until: Option<String> = kwargs.get("until")?;
+            kwargs.assert_all_used()?;
 
-            if let Some(url) = platform.commits_url(&git_ref, author, since, until) {
-                Ok(Value::String(url))
-            } else {
-                Ok(Value::Null)
-            }
+            Ok(platform
+                .commits_url(
+                    &git_ref,
+                    author.as_deref().unwrap_or(""),
+                    since.as_deref().unwrap_or(""),
+                    until.as_deref().unwrap_or(""),
+                )
+                .map_or(Value::from(()), Value::from))
         }
     });
 }
@@ -315,28 +294,31 @@ pub fn render_history(
         return Ok(String::new());
     }
 
-    let mut tera = tera::Tera::default();
-    tera.add_raw_template("main", template)
+    let mut env = Environment::new();
+    env.set_undefined_behavior(UndefinedBehavior::SemiStrict);
+
+    env.add_filter("unwrap", unwrap_filter);
+    env.add_filter("mention", mention_filter);
+    env.add_filter("typed", typed_filter);
+    env.add_filter("scoped", scoped_filter);
+    env.add_filter("table_escape", table_escape_filter);
+    env.add_filter("date", date_filter);
+
+    register_platform_functions(&mut env, git_ref, range, platform);
+
+    env.add_template("main", template)
         .context("failed to parse template")?;
 
-    tera.register_filter("unwrap", unwrap_filter);
-    tera.register_filter("mention", mention_filter);
-    tera.register_filter("typed", typed_filter);
-    tera.register_filter("scoped", scoped_filter);
-    tera.register_filter("table_escape", table_escape_filter);
-
-    register_platform_functions(&mut tera, git_ref, range, platform);
-
-    let mut context = tera::Context::new();
-    context.insert("commits", &analyzed.commits);
-    context.insert("contributors", &analyzed.contributors);
-    context.insert("git_ref", git_ref);
-    context.insert("from_ref", &range.from);
-    context.insert("to_ref", &range.to);
-    context.insert("release_date", &release_date);
-
-    let rendered = tera
-        .render("main", &context)
+    let rendered = env
+        .get_template("main")?
+        .render(context! {
+            commits => &analyzed.commits,
+            contributors => &analyzed.contributors,
+            git_ref => git_ref,
+            from_ref => &range.from,
+            to_ref => &range.to,
+            release_date => release_date,
+        })
         .context("failed to render template")?;
 
     Ok(rendered.trim_start().to_string())

@@ -97,6 +97,40 @@ impl TestRepo {
         self.commit_internal(Some(path), message)
     }
 
+    fn commit_on(&mut self, parents: &[Oid], message: &str, timestamp: i64) -> Result<Oid> {
+        self.commit_counter += 1;
+        let file_path = format!("file{}.txt", self.commit_counter);
+        self.write_file(&file_path, "test content")?;
+
+        let parent_commits = parents
+            .iter()
+            .map(|oid| self.repo.find_commit(*oid))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut index = self.repo.index()?;
+        index.read_tree(&parent_commits[0].tree()?)?;
+        index.add_path(Path::new(&file_path))?;
+        let tree = self.repo.find_tree(index.write_tree()?)?;
+
+        let sig = Signature::new(TEST_USER_NAME, TEST_USER_EMAIL, &Time::new(timestamp, 0))?;
+        let parents: Vec<_> = parent_commits.iter().collect();
+        Ok(self
+            .repo
+            .commit(None, &sig, &sig, message, &tree, &parents)?)
+    }
+
+    fn merge(&mut self, other: Oid, message: &str) -> Result<Oid> {
+        let head = self.repo.find_commit(*self.commits.last().unwrap())?;
+        let other = self.repo.find_commit(other)?;
+        let tree = head.tree()?;
+
+        let sig = self.create_signature()?;
+        let oid = self
+            .repo
+            .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&head, &other])?;
+        self.commits.push(oid);
+        Ok(oid)
+    }
+
     fn commit_internal(&mut self, path: Option<&str>, message: &str) -> Result<Oid> {
         self.commit_counter += 1;
         let file_path = match path {
@@ -757,5 +791,302 @@ The rest is silence.",
     );
     assert_eq!(commits[0].linked_issues.len(), 1);
     assert_eq!(commits[0].linked_issues[0].number, 7);
+    Ok(())
+}
+
+// main:        v1.0.0 ── v2.0.0 ── c2 ── v2.1.0
+//                 └── v1.0.1 (backport, committed between v2.0.0 and v2.1.0)
+fn repo_with_backport() -> Result<TestRepo> {
+    let mut test_repo = TestRepo::new()?;
+    let v1_0_0 = test_repo.commit("feat: what's in a name? That which we call a rose")?;
+    let v2_0_0 = test_repo.commit("feat: all the world's a stage")?;
+    test_repo.commit("feat: to be, or not to be, that is the question")?;
+    let v2_1_0 = test_repo.commit("feat: brevity is the soul of wit")?;
+    let v1_0_1 = test_repo.commit_on(
+        &[v1_0_0],
+        "fix: the lady doth protest too much, methinks",
+        BASE_TIMESTAMP + 2,
+    )?;
+
+    test_repo.create_tag("v1.0.0", v1_0_0)?;
+    test_repo.create_tag("v2.0.0", v2_0_0)?;
+    test_repo.create_tag("v2.1.0", v2_1_0)?;
+    test_repo.create_tag("v1.0.1", v1_0_1)?;
+    Ok(test_repo)
+}
+
+#[test]
+fn ignores_newer_backport_tag_when_selecting_previous_release() -> Result<()> {
+    let test_repo = repo_with_backport()?;
+    let git_repo = GitRepo::open(test_repo.path())?;
+
+    let history = git_repo.history(Some("v2.1.0".to_string()), None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v2.0.0"));
+    let first_lines: Vec<_> = history
+        .commits
+        .iter()
+        .map(|c| c.first_line.as_str())
+        .collect();
+    assert_eq!(
+        first_lines,
+        vec![
+            "feat: brevity is the soul of wit",
+            "feat: to be, or not to be, that is the question"
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn selects_branch_ancestor_as_previous_release_for_backport() -> Result<()> {
+    let test_repo = repo_with_backport()?;
+    let git_repo = GitRepo::open(test_repo.path())?;
+
+    let history = git_repo.history(Some("v1.0.1".to_string()), None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v1.0.0"));
+    let first_lines: Vec<_> = history
+        .commits
+        .iter()
+        .map(|c| c.first_line.as_str())
+        .collect();
+    assert_eq!(
+        first_lines,
+        vec!["fix: the lady doth protest too much, methinks"]
+    );
+    Ok(())
+}
+
+#[test]
+fn ignores_newer_backport_tag_from_untagged_head() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+    let v1_0_0 = test_repo.commit("feat: what's in a name? That which we call a rose")?;
+    test_repo.commit("feat: all the world's a stage")?;
+    let v1_0_1 = test_repo.commit_on(
+        &[v1_0_0],
+        "fix: the lady doth protest too much, methinks",
+        BASE_TIMESTAMP + 10,
+    )?;
+    test_repo.create_tag("v1.0.0", v1_0_0)?;
+    test_repo.create_tag("v1.0.1", v1_0_1)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let history = git_repo.history(None, None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v1.0.0"));
+    let first_lines: Vec<_> = history
+        .commits
+        .iter()
+        .map(|c| c.first_line.as_str())
+        .collect();
+    assert_eq!(first_lines, vec!["feat: all the world's a stage"]);
+    Ok(())
+}
+
+#[test]
+fn prefers_highest_semver_when_a_commit_has_several_tags() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        Now is the winter of our discontent
+        (tag: v1.9.0, v2.0.0) All the world's a stage
+        (tag: v1.0.0) What's in a name? That which we call a rose
+    ",
+    )?;
+    let git_repo = GitRepo::open(test_repo.path())?;
+
+    let tagged = git_repo.history(Some("v2.0.0".to_string()), None)?;
+    assert_eq!(tagged.range.from, "v2.0.0");
+    assert_eq!(tagged.range.to.as_deref(), Some("v1.0.0"));
+    assert_eq!(tagged.commits.len(), 1);
+
+    let head = git_repo.history(None, None)?;
+    assert_eq!(head.range.to.as_deref(), Some("v2.0.0"));
+    Ok(())
+}
+
+// main:        v1.0.0 ── v2.0.0 ── merge ── v2.1.0
+//                 └── v1.0.1 ──────┘ (backport, tagged after v2.0.0, merged into main)
+#[test]
+fn ignores_merged_backport_tag_when_selecting_previous_release() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+    let v1_0_0 = test_repo.commit("feat: what's in a name? That which we call a rose")?;
+    let v2_0_0 = test_repo.commit("feat: all the world's a stage")?;
+    let v1_0_1 = test_repo.commit_on(
+        &[v1_0_0],
+        "fix: the lady doth protest too much, methinks",
+        BASE_TIMESTAMP + 10,
+    )?;
+    test_repo.merge(v1_0_1, "chore: merge the v1 maintenance branch")?;
+    let v2_1_0 = test_repo.commit("feat: brevity is the soul of wit")?;
+
+    test_repo.create_tag("v1.0.0", v1_0_0)?;
+    test_repo.create_tag("v2.0.0", v2_0_0)?;
+    test_repo.create_tag("v1.0.1", v1_0_1)?;
+    test_repo.create_tag("v2.1.0", v2_1_0)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let history = git_repo.history(Some("v2.1.0".to_string()), None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v2.0.0"));
+    let first_lines: Vec<_> = history
+        .commits
+        .iter()
+        .map(|c| c.first_line.as_str())
+        .collect();
+    assert!(
+        !first_lines.contains(&"feat: all the world's a stage"),
+        "v2.0.0's commit was already released: {first_lines:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn labels_explicit_refs_with_the_requested_tag() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        Now is the winter of our discontent
+        (tag: v1.9.0, v2.0.0) All the world's a stage
+        (tag: v1.0.0) What's in a name? That which we call a rose
+    ",
+    )?;
+    let git_repo = GitRepo::open(test_repo.path())?;
+
+    let from = git_repo.history(Some("v1.9.0".to_string()), None)?;
+    assert_eq!(from.range.from, "v1.9.0");
+
+    let to = git_repo.history(None, Some("v1.9.0".to_string()))?;
+    assert_eq!(to.range.to.as_deref(), Some("v1.9.0"));
+    Ok(())
+}
+
+// A merge whose parents reach both v2.0.0 and v1.0.0, which descends from it.
+// v2.0.0 carries the newest commit date and the higher version, so date order
+// alone would wrongly treat it as a candidate for the previous release.
+//
+//   v2.0.0 (skewed: newest date) ── v1.0.0 ──┐
+//         └───────────────────────────────── merge ── v3.0.0
+#[test]
+fn only_nearest_tags_are_candidates_when_commit_dates_are_skewed() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+    let root = test_repo.commit("feat: what's in a name? That which we call a rose")?;
+    let ancestor = test_repo.commit_on(
+        &[root],
+        "feat: all the world's a stage",
+        BASE_TIMESTAMP + 100,
+    )?;
+    let nearest = test_repo.commit_on(
+        &[ancestor],
+        "fix: the lady doth protest too much, methinks",
+        BASE_TIMESTAMP + 1,
+    )?;
+    let merge = test_repo.commit_on(
+        &[nearest, ancestor],
+        "chore: merge the hotfix",
+        BASE_TIMESTAMP + 2,
+    )?;
+    let from = test_repo.commit_on(
+        &[merge],
+        "feat: brevity is the soul of wit",
+        BASE_TIMESTAMP + 3,
+    )?;
+
+    test_repo.create_tag("v2.0.0", ancestor)?;
+    test_repo.create_tag("v1.0.0", nearest)?;
+    test_repo.create_tag("v3.0.0", from)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let history = git_repo.history(Some("v3.0.0".to_string()), None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v1.0.0"));
+    Ok(())
+}
+
+// main:        v1.0.0 ── v2.0.0
+//                 │         └──────────┐
+// maintenance:    └── v1.0.1 ──── merge ── v1.0.2
+#[test]
+fn previous_release_is_lower_than_a_tagged_from() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+    let v1_0_0 = test_repo.commit("feat: what's in a name? That which we call a rose")?;
+    let v2_0_0 = test_repo.commit("feat: all the world's a stage")?;
+    let v1_0_1 = test_repo.commit_on(
+        &[v1_0_0],
+        "fix: the lady doth protest too much, methinks",
+        BASE_TIMESTAMP + 10,
+    )?;
+    let merge = test_repo.commit_on(
+        &[v1_0_1, v2_0_0],
+        "chore: merge main into maintenance",
+        BASE_TIMESTAMP + 11,
+    )?;
+    let v1_0_2 = test_repo.commit_on(
+        &[merge],
+        "fix: brevity is the soul of wit",
+        BASE_TIMESTAMP + 12,
+    )?;
+
+    test_repo.create_tag("v1.0.0", v1_0_0)?;
+    test_repo.create_tag("v2.0.0", v2_0_0)?;
+    test_repo.create_tag("v1.0.1", v1_0_1)?;
+    test_repo.create_tag("v1.0.2", v1_0_2)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let history = git_repo.history(Some("v1.0.2".to_string()), None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v1.0.1"));
+    Ok(())
+}
+
+#[test]
+fn ceiling_comes_from_the_requested_tag() -> Result<()> {
+    let test_repo = TestRepo::from_log(
+        "
+        (tag: v1.9.0, v2.0.0) All the world's a stage
+        (tag: v1.10.0) Brevity is the soul of wit
+        (tag: v1.0.0) What's in a name? That which we call a rose
+    ",
+    )?;
+    let git_repo = GitRepo::open(test_repo.path())?;
+
+    let history = git_repo.history(Some("v1.9.0".to_string()), None)?;
+
+    assert_eq!(history.range.from, "v1.9.0");
+    assert_eq!(history.range.to.as_deref(), Some("v1.0.0"));
+    Ok(())
+}
+
+// main:        v1.0.0 ── v2.0.0
+//                 │         └─────┐
+// maintenance:    └── fix ──── merge ── v1.0.1
+#[test]
+fn walks_past_newer_tags_to_a_lower_previous_release() -> Result<()> {
+    let mut test_repo = TestRepo::new()?;
+    let v1_0_0 = test_repo.commit("feat: what's in a name? That which we call a rose")?;
+    let v2_0_0 = test_repo.commit("feat: all the world's a stage")?;
+    let fix = test_repo.commit_on(
+        &[v1_0_0],
+        "fix: the lady doth protest too much, methinks",
+        BASE_TIMESTAMP + 10,
+    )?;
+    let merge = test_repo.commit_on(
+        &[fix, v2_0_0],
+        "chore: merge main into maintenance",
+        BASE_TIMESTAMP + 11,
+    )?;
+    let v1_0_1 = test_repo.commit_on(
+        &[merge],
+        "fix: brevity is the soul of wit",
+        BASE_TIMESTAMP + 12,
+    )?;
+
+    test_repo.create_tag("v1.0.0", v1_0_0)?;
+    test_repo.create_tag("v2.0.0", v2_0_0)?;
+    test_repo.create_tag("v1.0.1", v1_0_1)?;
+
+    let git_repo = GitRepo::open(test_repo.path())?;
+    let history = git_repo.history(Some("v1.0.1".to_string()), None)?;
+
+    assert_eq!(history.range.to.as_deref(), Some("v1.0.0"));
     Ok(())
 }

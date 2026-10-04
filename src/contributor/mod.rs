@@ -50,10 +50,9 @@ pub trait PlatformResolver {
             ])
         });
 
-        AI_CONTRIBUTORS.get(email).map(|username| {
-            log::info!("Resolved AI contributor: {} -> @{}", email, username);
-            username.to_string()
-        })
+        AI_CONTRIBUTORS
+            .get(email)
+            .map(|username| username.to_string())
     }
 
     /// Generates a Gravatar URL for the given email address.

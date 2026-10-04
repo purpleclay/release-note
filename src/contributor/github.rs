@@ -154,14 +154,6 @@ impl PlatformResolver for GitHubResolver {
                 .query_user_api(&username)
                 .unwrap_or_else(|| (Self::generate_gravatar_url(email), false));
 
-            log::info!(
-                "resolved contributor {} for email: {} (bot: {}, ai: {})",
-                username,
-                email,
-                is_bot,
-                is_ai
-            );
-
             Contributor {
                 username,
                 avatar_url,

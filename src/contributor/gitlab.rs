@@ -245,8 +245,6 @@ impl GitLabResolver {
 
 impl PlatformResolver for GitLabResolver {
     fn resolve(&mut self, commit_hash: Option<&str>, email: &str) -> Option<Contributor> {
-        log::info!("resolving contributor for email: {}", email);
-
         if let Some(cached) = self.cache.get(email) {
             return cached.clone();
         }
@@ -258,8 +256,6 @@ impl PlatformResolver for GitLabResolver {
                 is_bot: false,
                 is_ai: true,
             };
-
-            log::info!("resolved AI contributor {} for email: {}", username, email);
 
             self.cache
                 .insert(email.to_string(), Some(contributor.clone()));
@@ -273,13 +269,6 @@ impl PlatformResolver for GitLabResolver {
             let (avatar_url, is_bot) = self
                 .query_user_api(&username)
                 .unwrap_or_else(|| (Self::generate_gravatar_url(email), false));
-
-            log::info!(
-                "resolved contributor {} for email: {} (bot: {})",
-                username,
-                email,
-                is_bot
-            );
 
             Contributor {
                 username,

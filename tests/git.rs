@@ -905,23 +905,95 @@ fn prefers_highest_semver_when_a_commit_has_several_tags() -> Result<()> {
     Ok(())
 }
 
-fn release_heading(path: &Path) -> String {
+fn release_note(path: &Path, args: &[&str]) -> std::process::Output {
     // Stops CI detection resolving contributors through the platform API
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_release-note"))
+    std::process::Command::new(env!("CARGO_BIN_EXE_release-note"))
+        .args(args)
         .arg("--path")
         .arg(path)
         .env_remove("GITHUB_ACTIONS")
         .env_remove("GITLAB_CI")
         .output()
-        .unwrap();
-    assert!(output.status.success(), "{output:?}");
-
-    String::from_utf8(output.stdout)
         .unwrap()
+}
+
+fn release_note_stdout(path: &Path, args: &[&str]) -> String {
+    let output = release_note(path, args);
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
+}
+
+fn release_heading(path: &Path) -> String {
+    release_note_stdout(path, &[])
         .lines()
         .next()
         .unwrap()
         .to_string()
+}
+
+fn ranged_repo() -> Result<TestRepo> {
+    TestRepo::from_log(
+        "
+        feat: now is the winter of our discontent
+        (tag: v1.0.0) feat: all the world's a stage
+        (tag: v0.9.0) fix: what's in a name?
+        feat: to be or not to be
+    ",
+    )
+}
+
+#[test]
+fn accepts_a_git_style_range() -> Result<()> {
+    let test_repo = ranged_repo()?;
+
+    let note = release_note_stdout(test_repo.path(), &["v0.9.0..v1.0.0"]);
+    assert!(note.starts_with("## v1.0.0 - "), "{note}");
+    assert!(note.contains("all the world's a stage"), "{note}");
+    assert!(!note.contains("now is the winter"), "{note}");
+    assert!(!note.contains("what's in a name?"), "{note}");
+    Ok(())
+}
+
+#[test]
+fn range_without_an_end_reaches_head() -> Result<()> {
+    let test_repo = ranged_repo()?;
+
+    let note = release_note_stdout(test_repo.path(), &["v0.9.0.."]);
+    assert!(note.contains("now is the winter"), "{note}");
+    assert!(note.contains("all the world's a stage"), "{note}");
+    assert!(!note.contains("what's in a name?"), "{note}");
+    Ok(())
+}
+
+#[test]
+fn single_ref_measures_from_the_previous_release() -> Result<()> {
+    let test_repo = ranged_repo()?;
+
+    let note = release_note_stdout(test_repo.path(), &["v1.0.0"]);
+    assert!(note.starts_with("## v1.0.0 - "), "{note}");
+    assert!(note.contains("all the world's a stage"), "{note}");
+    assert!(!note.contains("what's in a name?"), "{note}");
+    Ok(())
+}
+
+#[test]
+fn rejects_a_symmetric_difference_range() -> Result<()> {
+    let test_repo = ranged_repo()?;
+
+    let output = release_note(test_repo.path(), &["v0.9.0...v1.0.0"]);
+    assert!(!output.status.success(), "{output:?}");
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("v0.9.0..v1.0.0"), "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn rejects_two_positional_refs() -> Result<()> {
+    let test_repo = ranged_repo()?;
+
+    let output = release_note(test_repo.path(), &["v1.0.0", "v0.9.0"]);
+    assert!(!output.status.success(), "{output:?}");
+    Ok(())
 }
 
 #[test]

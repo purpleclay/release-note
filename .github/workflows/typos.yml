@@ -22,7 +22,15 @@ jobs:
       - name: harden_runner
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            cache.nixos.org:443
+            cachix.org:443
+            github.com:443
+            purpleclay.cachix.org:443
+            releases.nixos.org:443
+            static.rust-lang.org:443
 
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

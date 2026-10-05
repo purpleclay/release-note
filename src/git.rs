@@ -3,33 +3,23 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use git2::{DiffOptions, Oid, Repository, Sort};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use semver::Version;
 use serde::Serialize;
-use thiserror::Error;
+use std::sync::LazyLock;
 
 use crate::contributor::Contributor;
 
-#[derive(Error, Debug)]
-pub enum GitRepoError {
-    #[error("repository is a shallow clone with incomplete history")]
-    ShallowClone,
+static GIT_TRAILER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([A-Za-z][\w-]*)\s*:\s*(.+)$").unwrap());
 
-    #[error("repository is empty and contains no commits")]
-    EmptyRepository,
-}
-
-static GIT_TRAILER: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([A-Za-z][\w-]*)\s*:\s*(.+)$").unwrap());
-
-static LINKED_ISSUE: Lazy<Regex> = Lazy::new(|| {
+static LINKED_ISSUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^(?i)(?:close[sd]?|fix(?:es|ed)?|resolve(?:s|d)?)(?::\s*|\s+)(?:([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)#(\d+)|#(\d+))$"
     ).unwrap()
 });
 
-static EXCESSIVE_BLANK_LINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n{3,}").unwrap());
+static EXCESSIVE_BLANK_LINES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").unwrap());
 
 pub struct GitRepo {
     repo: Repository,
@@ -84,8 +74,8 @@ impl GitTrailer {
     where
         F: FnOnce(String, Option<String>) -> Self,
     {
-        static EMAIL: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^(.+?)\s*[<(]([^>)]+)[>)]$").unwrap());
+        static EMAIL: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"^(.+?)\s*[<(]([^>)]+)[>)]$").unwrap());
 
         if let Some(caps) = EMAIL.captures(value.trim()) {
             let name = caps[1].trim().to_string();
@@ -307,11 +297,11 @@ impl GitRepo {
             .context("repository has no working directory")?;
 
         if repo.is_empty()? {
-            return Err(GitRepoError::EmptyRepository.into());
+            anyhow::bail!("repository is empty and contains no commits");
         }
 
         if repo.is_shallow() {
-            return Err(GitRepoError::ShallowClone.into());
+            anyhow::bail!("repository is a shallow clone with incomplete history");
         }
 
         let canonical_abs_path = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());

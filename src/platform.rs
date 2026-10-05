@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Platform {
@@ -287,14 +288,22 @@ impl Platform {
     }
 }
 
+// Every character except the unreserved set from RFC 3986
+const URL_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
+
+// Percent-encodes a value for use as a single URL path segment or query value.
+pub(crate) fn encode(value: &str) -> String {
+    utf8_percent_encode(value, URL_COMPONENT).to_string()
+}
+
 // Percent-encodes a git ref for use in a URL path, keeping `/` so that
 // path-prefixed tags such as `component/v1.0.0` stay readable.
 fn encode_ref(git_ref: &str) -> String {
-    git_ref
-        .split('/')
-        .map(|segment| urlencoding::encode(segment))
-        .collect::<Vec<_>>()
-        .join("/")
+    git_ref.split('/').map(encode).collect::<Vec<_>>().join("/")
 }
 
 fn is_trusted_host(host: &str, trusted_hosts: &[String]) -> bool {

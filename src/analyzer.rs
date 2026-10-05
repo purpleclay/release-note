@@ -1,20 +1,20 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::LazyLock;
 
 use crate::git::Commit;
 
 // A scope may contain any character except `)`. Whitespace before the colon
 // (`feat :`) is deliberately tolerated, although the specification forbids it.
-static CONVENTIONAL_COMMIT_PREFIX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([^)]+)\))?(!)?(?:\s*):(?:\s*)(.+)").unwrap());
+static CONVENTIONAL_COMMIT_PREFIX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^([a-z]+)(?:\(([^)]+)\))?(!)?(?:\s*):(?:\s*)(.+)").unwrap());
 
-static BREAKING_FOOTER: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:").unwrap());
+static BREAKING_FOOTER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:").unwrap());
 
-static BREAKING_FOOTER_DESC: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:[ \t]*(?s:(.+))").unwrap());
+static BREAKING_FOOTER_DESC: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?im)^BREAKING[- ]CHANGES?:[ \t]*(?s:(.+))").unwrap());
 
 struct ConventionalCommit {
     commit_type: String,

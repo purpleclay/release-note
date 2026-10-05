@@ -51,7 +51,11 @@ impl GitHubResolver {
     }
 
     fn query_user_api(&self, username: &str) -> Option<(String, bool)> {
-        let url = format!("{}/users/{}", self.api_url, urlencoding::encode(username));
+        let url = format!(
+            "{}/users/{}",
+            self.api_url,
+            crate::platform::encode(username)
+        );
 
         let mut request = self
             .agent
@@ -210,7 +214,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path(format!(
                 "/users/{}",
-                urlencoding::encode("hamlet[bot]")
+                crate::platform::encode("hamlet[bot]")
             )))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "avatar_url": AVATAR_URL,

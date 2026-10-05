@@ -2,11 +2,11 @@ use crate::{analyzer::AnalyzedCommits, git::ReleaseRange, platform::Platform};
 use anyhow::{Context, Result};
 use minijinja::value::{Kwargs, Value};
 use minijinja::{Environment, Error, ErrorKind, UndefinedBehavior, context};
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
-static NUMBERED_LIST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+\.\s").unwrap());
-static TABLE_SEPARATOR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\|[\s\-:|]+\|$").unwrap());
+static NUMBERED_LIST: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+\.\s").unwrap());
+static TABLE_SEPARATOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\|[\s\-:|]+\|$").unwrap());
 
 fn is_table_line(line: &str) -> bool {
     let trimmed = line.trim();

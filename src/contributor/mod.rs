@@ -39,16 +39,17 @@ pub trait PlatformResolver {
     where
         Self: Sized,
     {
-        use once_cell::sync::Lazy;
         use std::collections::HashMap;
+        use std::sync::LazyLock;
 
-        static AI_CONTRIBUTORS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
-            HashMap::from([
-                // Claude Code uses this email for co-authorship attribution
-                // Format: Co-authored-by: Claude <noreply@anthropic.com>
-                ("noreply@anthropic.com", "claude"),
-            ])
-        });
+        static AI_CONTRIBUTORS: LazyLock<HashMap<&'static str, &'static str>> =
+            LazyLock::new(|| {
+                HashMap::from([
+                    // Claude Code uses this email for co-authorship attribution
+                    // Format: Co-authored-by: Claude <noreply@anthropic.com>
+                    ("noreply@anthropic.com", "claude"),
+                ])
+            });
 
         AI_CONTRIBUTORS
             .get(email)
@@ -69,13 +70,11 @@ pub trait PlatformResolver {
     where
         Self: Sized,
     {
-        use sha2::{Digest, Sha256};
+        use ring::digest::{SHA256, digest};
 
         let normalized_email = email.trim().to_lowercase();
-        let mut hasher = Sha256::new();
-        hasher.update(normalized_email.as_bytes());
-        let hash: String = hasher
-            .finalize()
+        let hash: String = digest(&SHA256, normalized_email.as_bytes())
+            .as_ref()
             .iter()
             .map(|b| format!("{:02x}", b))
             .collect();

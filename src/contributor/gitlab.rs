@@ -154,7 +154,7 @@ impl GitLabResolver {
         let search_url = format!(
             "{}/users?username={}",
             self.rest_api_url,
-            urlencoding::encode(username)
+            crate::platform::encode(username)
         );
 
         let mut request = self.agent.get(&search_url).header(

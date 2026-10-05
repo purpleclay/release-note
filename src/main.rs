@@ -52,6 +52,21 @@ struct Args {
     version: bool,
 }
 
+// Prints each message to stderr without a level or timestamp
+struct StderrLogger;
+
+impl log::Log for StderrLogger {
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record) {
+        eprintln!("{}", record.args());
+    }
+
+    fn flush(&self) {}
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -61,13 +76,8 @@ fn main() -> Result<()> {
     }
 
     if args.verbose {
-        env_logger::Builder::new()
-            .format(|buf, record| {
-                use std::io::Write;
-                writeln!(buf, "{}", record.args())
-            })
-            .filter_level(log::LevelFilter::Info)
-            .init();
+        log::set_logger(&StderrLogger).expect("logger is only set once");
+        log::set_max_level(log::LevelFilter::Info);
     }
 
     let template = TemplateResolver::new(args.path.clone()).resolve()?;

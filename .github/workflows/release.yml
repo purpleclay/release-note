@@ -6,7 +6,68 @@ on:
 permissions: {}
 
 jobs:
+  # Built from the tag, so each release is described by its own version
+  # rather than the one release-note-action pins. Read-only, so code from
+  # the tag never runs with signing permissions.
+  release_note:
+    name: release_note
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      note: ${{ steps.note.outputs.note }}
+    steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            6d63fbac34f30fbde4e3420ca14565c0.r2.cloudflarestorage.com:443
+            api.github.com:443
+            cache.nixos.org:443
+            cachix.org:443
+            github.com:443
+            purpleclay.cachix.org:443
+            releases.nixos.org:443
+            static.crates.io:443
+            static.rust-lang.org:443
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: install_nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: setup_cachix
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: purpleclay
+          # Public cache and read-only here, so no token reaches code from the tag
+          skipPush: true
+          useDaemon: false
+
+      # Random delimiter, so a line in the note can't end the output early.
+      - name: generate_note
+        id: note
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          nix run . -- --version
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "note<<${delimiter}"
+            nix run . --
+            echo "${delimiter}"
+          } >> "$GITHUB_OUTPUT"
+
   release:
+    needs: release_note
     permissions:
       id-token: write # OIDC identity for Sigstore signing
       attestations: write # persist attestations
@@ -18,3 +79,4 @@ jobs:
       targets: '["x86_64-unknown-linux-musl","aarch64-unknown-linux-musl","x86_64-apple-darwin","aarch64-apple-darwin"]'
       # Keep in sync with the rustToolchain pin in flake.nix
       toolchain: "1.90.0"
+      release-note: ${{ needs.release_note.outputs.note }}

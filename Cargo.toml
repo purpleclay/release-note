@@ -14,7 +14,7 @@ clap = { version = "4.5.49", features = ["derive", "env"] }
 git2 = { version = "0.21.0", default-features = false }
 jiff = { version = "0.2", default-features = false, features = ["std"] }
 log = "0.4"
-minijinja = "2.24"
+minijinja = "3.0"
 percent-encoding = "2.3"
 regex = "1.11.1"
 ring = "0.17"

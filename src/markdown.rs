@@ -1,6 +1,6 @@
 use crate::{analyzer::AnalyzedCommits, git::ReleaseRange, platform::Platform};
 use anyhow::{Context, Result};
-use minijinja::value::{Kwargs, Value};
+use minijinja::value::{Kwargs, Serde, Value};
 use minijinja::{Environment, Error, ErrorKind, UndefinedBehavior, context};
 use regex::Regex;
 use std::sync::LazyLock;
@@ -312,8 +312,8 @@ pub fn render_history(
     let rendered = env
         .get_template("main")?
         .render(context! {
-            commits => &analyzed.commits,
-            contributors => &analyzed.contributors,
+            commits => Serde(&analyzed.commits),
+            contributors => Serde(&analyzed.contributors),
             git_ref => git_ref,
             from_ref => &range.from,
             to_ref => &range.to,

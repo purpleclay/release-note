@@ -1268,3 +1268,46 @@ fn checking_an_undefined_field_is_allowed() {
     .unwrap();
     assert_eq!(result, "no");
 }
+
+#[test]
+fn composes_a_fresh_template_from_parts() {
+    let result = render_one(
+        r#"{% import "release-note/parts" as rn -%}
+{{ rn.header(date_format="%Y-%m-%d") }}
+{{ rn.section("Added", commits | typed(include="feat")) }}
+
+{% for commit in commits %}{{ rn.entry(commit) }}{% endfor %}"#,
+    )
+    .unwrap();
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn renders_section_heading_at_requested_level() {
+    let result = render_one(
+        r#"{% import "release-note/parts" as rn %}{{ rn.section("Added", commits, level=3) }}"#,
+    )
+    .unwrap();
+
+    assert!(result.starts_with("### Added\n"), "{result}");
+}
+
+#[test]
+fn renders_nothing_for_a_section_without_commits() {
+    let result =
+        render_one(r#"{% import "release-note/parts" as rn %}{{ rn.section("Fixed", []) }}end"#)
+            .unwrap();
+
+    assert_eq!(result, "end");
+}
+
+#[test]
+fn renders_stats_without_links() {
+    let result = render_one(
+        r#"{% import "release-note/parts" as rn %}{{ rn.stats([], commits, [], link=false) }}"#,
+    )
+    .unwrap();
+
+    assert_eq!(result, "**`1`** new feature\n");
+}

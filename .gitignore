@@ -19,6 +19,7 @@
 !SECURITY.md
 !src/**/*.rs
 !src/templates/default.jinja
+!src/templates/parts.jinja
 !tests/*.proptest-regressions
 !tests/*.rs
 !tests/snapshots/*.snap

@@ -4,10 +4,13 @@ use minijinja::syntax::SyntaxConfig;
 use std::path::{Path, PathBuf};
 
 pub const DEFAULT_TEMPLATE: &str = include_str!("templates/default.jinja");
+const PARTS_TEMPLATE: &str = include_str!("templates/parts.jinja");
 
 // Templates a custom template can extend, import or include, by name
-pub(crate) const BUILT_IN_TEMPLATES: [(&str, &str); 1] =
-    [("release-note/default", DEFAULT_TEMPLATE)];
+pub(crate) const BUILT_IN_TEMPLATES: [(&str, &str); 2] = [
+    ("release-note/default", DEFAULT_TEMPLATE),
+    ("release-note/parts", PARTS_TEMPLATE),
+];
 
 pub struct TemplateResolver {
     working_dir: PathBuf,

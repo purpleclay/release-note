@@ -1,0 +1,10 @@
+---
+source: tests/markdown.rs
+expression: result
+---
+## HEAD - 2025-11-27
+
+## Added
+- **`8c8a505`** all the world's a stage
+
+- **`8c8a505`** all the world's a stage

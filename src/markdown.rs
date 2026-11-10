@@ -1,3 +1,4 @@
+use crate::template::BUILT_IN_TEMPLATES;
 use crate::{analyzer::AnalyzedCommits, git::ReleaseRange, platform::Platform};
 use anyhow::{Context, Result};
 use minijinja::value::{Kwargs, Serde, Value};
@@ -282,6 +283,26 @@ fn register_platform_functions(
     });
 }
 
+// Every template is validated and rendered in this environment, so a template
+// that passes validation can reach the same filters and built-in templates
+pub(crate) fn environment() -> Environment<'static> {
+    let mut env = Environment::new();
+    env.set_undefined_behavior(UndefinedBehavior::SemiStrict);
+
+    env.add_filter("unwrap", unwrap_filter);
+    env.add_filter("mention", mention_filter);
+    env.add_filter("typed", typed_filter);
+    env.add_filter("scoped", scoped_filter);
+    env.add_filter("table_escape", table_escape_filter);
+    env.add_filter("date", date_filter);
+
+    for (name, source) in BUILT_IN_TEMPLATES {
+        env.add_template(name, source)
+            .expect("built-in templates are valid");
+    }
+    env
+}
+
 pub fn render_history(
     analyzed: &AnalyzedCommits,
     platform: &Platform,
@@ -294,16 +315,7 @@ pub fn render_history(
         return Ok(String::new());
     }
 
-    let mut env = Environment::new();
-    env.set_undefined_behavior(UndefinedBehavior::SemiStrict);
-
-    env.add_filter("unwrap", unwrap_filter);
-    env.add_filter("mention", mention_filter);
-    env.add_filter("typed", typed_filter);
-    env.add_filter("scoped", scoped_filter);
-    env.add_filter("table_escape", table_escape_filter);
-    env.add_filter("date", date_filter);
-
+    let mut env = environment();
     register_platform_functions(&mut env, git_ref, range, platform);
 
     env.add_template("main", template)

@@ -148,3 +148,73 @@ fn reports_the_line_of_a_template_syntax_error() {
     assert!(error.contains("invalid template syntax"), "{error}");
     assert!(error.contains("release-note.jinja:3"), "{error}");
 }
+
+fn resolve_template(content: &str) -> anyhow::Result<String> {
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(temp_dir.path().join("release-note.jinja"), content).unwrap();
+    TemplateResolver::new(temp_dir.path().to_path_buf()).resolve()
+}
+
+#[test]
+fn accepts_template_extending_the_built_in_default() {
+    let template = r#"{% extends "release-note/default" %}"#;
+
+    assert_eq!(resolve_template(template).unwrap(), template);
+}
+
+#[test]
+fn fails_on_template_referencing_an_unknown_template() {
+    for template in [
+        r#"{% extends "release-note/defualt" %}"#,
+        r#"{%- extends 'release-note/defualt' -%}"#,
+        r#"{% import "release-note/defualt" as rn %}"#,
+        r#"{% from "release-note/defualt" import entry %}"#,
+        r#"{% include "release-note/defualt" %}"#,
+        r#"{% include "release-note/defualt" with context %}{% include "x" ignore missing %}"#,
+    ] {
+        let error = format!("{:#}", resolve_template(template).unwrap_err());
+
+        assert!(
+            error.contains("release-note/defualt"),
+            "{template}: {error}"
+        );
+        assert!(
+            error.contains("release-note/default"),
+            "{template}: {error}"
+        );
+    }
+}
+
+#[test]
+fn ignores_template_references_inside_comments() {
+    let template = r#"{# {% extends "release-note/defualt" %} #}## Release"#;
+
+    assert_eq!(resolve_template(template).unwrap(), template);
+}
+
+#[test]
+fn ignores_template_references_that_are_not_tags() {
+    for template in [
+        r#"{{ '{% include "release-note/defualt" %}' }}"#,
+        r#"{% raw %}{% extends "release-note/defualt" %}{% endraw %}"#,
+    ] {
+        assert_eq!(resolve_template(template).unwrap(), template);
+    }
+}
+
+#[test]
+fn leaves_composed_template_names_to_render_time() {
+    let template = r#"{% extends "release-note/" ~ "default" %}"#;
+
+    assert_eq!(resolve_template(template).unwrap(), template);
+}
+
+#[test]
+fn accepts_optional_include_of_a_missing_template() {
+    for template in [
+        r#"{% include "release-note/optional" ignore missing %}"#,
+        r#"{% include "release-note/optional" with context ignore missing %}"#,
+    ] {
+        assert_eq!(resolve_template(template).unwrap(), template);
+    }
+}

@@ -18,6 +18,7 @@
 !scripts/*
 !SECURITY.md
 !src/**/*.rs
+!src/templates/default.jinja
 !tests/*.proptest-regressions
 !tests/*.rs
 !tests/snapshots/*.snap

@@ -10,6 +10,35 @@ use release_note::template::DEFAULT_TEMPLATE;
 // Fixed timestamp for tests: November 27, 2025 00:00:00 UTC
 const TEST_RELEASE_DATE: i64 = 1764201600;
 
+// Renders the default template, and checks a template that only extends it
+// renders the same, so every fixture also covers the built-in registration
+fn render_default(
+    analyzed: &AnalyzedCommits,
+    platform: &Platform,
+    git_ref: &str,
+    range: &ReleaseRange,
+    release_date: i64,
+) -> anyhow::Result<String> {
+    let default = markdown::render_history(
+        analyzed,
+        platform,
+        git_ref,
+        range,
+        release_date,
+        DEFAULT_TEMPLATE,
+    );
+    let extended = markdown::render_history(
+        analyzed,
+        platform,
+        git_ref,
+        range,
+        release_date,
+        r#"{% extends "release-note/default" %}"#,
+    );
+    assert_eq!(default.as_ref().ok(), extended.as_ref().ok());
+    default
+}
+
 fn first_release() -> ReleaseRange {
     ReleaseRange {
         from: "HEAD".to_string(),
@@ -51,13 +80,12 @@ fn generates_release_note_from_multiple_categories() {
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -76,13 +104,12 @@ fn includes_chore_deps_commits_in_dependency_table() {
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
     insta::assert_snapshot!(result);
@@ -138,13 +165,12 @@ fn displays_contributors_with_github_commit_links() {
         contributors,
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &platform,
         "v1.0.0",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -190,13 +216,12 @@ fn displays_contributors_without_links_for_gitlab() {
         contributors,
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &platform,
         "v1.0.0",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -225,13 +250,12 @@ the attribute to awe and majesty.",
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -260,13 +284,12 @@ That is the last scene of all, that ends this strange eventful history.",
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -291,13 +314,12 @@ CommitBuilder::new("feat: instructions for wooing fair maidens")
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -325,13 +347,12 @@ These lines must maintain their integrity as written by the immortal bard.",
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -352,13 +373,12 @@ CommitBuilder::new("feat: add indented example")
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -379,13 +399,12 @@ CommitBuilder::new("feat: add tab indented example")
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -411,13 +430,12 @@ The lines above must be preserved exactly as written.",
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -442,13 +460,12 @@ This soliloquy explores the fundamental nature of human existence and mortality.
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -491,13 +508,12 @@ Additional context on Elizabethan staging conventions is essential for authentic
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -507,13 +523,12 @@ Additional context on Elizabethan staging conventions is essential for authentic
 #[test]
 fn generates_no_release_note_when_no_commits() {
     let analyzed = CommitAnalyzer::analyze(&[]);
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -605,13 +620,12 @@ CommitBuilder::new("fix: something is rotten in the state of Denmark")
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -663,13 +677,12 @@ fn displays_multiple_contributors() {
         contributors,
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -712,13 +725,12 @@ fn filters_bot_contributors() {
         contributors,
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -771,13 +783,12 @@ fn ai_contributors_have_no_commit_links() {
         contributors,
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &platform,
         "v1.0.0",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -811,13 +822,12 @@ Shakespeare so masterfully employed.",
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -836,13 +846,12 @@ fn escapes_table_metacharacters_in_dependency_update_cell() {
         contributors: Vec::new(),
         ..CommitAnalyzer::analyze(&commits)
     };
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -965,13 +974,12 @@ fn renders_full_changelog_trailer_for_github() {
         CommitBuilder::new("fix: though she be but little, she is fierce").build(),
     ]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &github(),
         "v2.0.0",
         &release_range("v2.0.0", "v1.0.0"),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -987,13 +995,12 @@ fn renders_full_changelog_trailer_after_dependency_table_for_gitlab() {
             .build(),
     ]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &gitlab(),
         "v2.0.0",
         &release_range("v2.0.0", "v1.0.0"),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1005,13 +1012,12 @@ fn omits_full_changelog_trailer_without_previous_release() {
     let analyzed =
         CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &github(),
         "v1.0.0",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1023,13 +1029,12 @@ fn omits_full_changelog_trailer_for_unknown_platform() {
     let analyzed =
         CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "v2.0.0",
         &release_range("v2.0.0", "v1.0.0"),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1090,13 +1095,12 @@ fn full_changelog_trailer_survives_markdown_characters_in_refs() {
     let analyzed =
         CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &github(),
         "act_]/v2.0.0",
         &release_range("act_]/v2.0.0", "act_]/v1.0.0"),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1116,13 +1120,12 @@ fn renders_breaking_footer_from_breaking_description() {
             .build(),
     ]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1147,13 +1150,12 @@ new = 2
         CommitBuilder::new("refactor!: parting is such sweet sorrow").build(),
     ]);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &Platform::Unknown,
         "HEAD",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1190,13 +1192,12 @@ fn sizes_avatars_regardless_of_existing_query_string() {
         ..CommitAnalyzer::analyze(&[CommitBuilder::new("feat: all the world's a stage").build()])
     };
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &gitlab(),
         "v1.0.0",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
@@ -1221,13 +1222,12 @@ fn omits_contributors_heading_when_every_contributor_is_a_bot() {
     ]);
     assert_eq!(analyzed.contributors.len(), 2);
 
-    let result = markdown::render_history(
+    let result = render_default(
         &analyzed,
         &github(),
         "v1.0.0",
         &first_release(),
         TEST_RELEASE_DATE,
-        DEFAULT_TEMPLATE,
     )
     .unwrap();
 
